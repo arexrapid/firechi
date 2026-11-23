@@ -1,1496 +1,242 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>투명 숫자 카드 게임 - 17 법칙 (GPU 부드러운 비행 에디션)</title>
-  <!-- PeerJS WebRTC P2P 라이브러리 -->
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Noto+Sans+KR:wght@500;700;900&display=swap" rel="stylesheet">
-  <style>
-    :root {
-      --board-bg: #caa97d;
-      --board-border: #8c6a43;
-      --mat-bg: #3d4145;
-      --mat-border: #232629;
-      --text-main: #2c1d11;
-      --accent-green: #2ecc71;
-      --accent-yellow: #f1c40f;
-      --accent-blue: #3498db;
-      --accent-red: #e74c3c;
-    }
-
-    * {
-      box-sizing: border-box;
-      user-select: none;
-      margin: 0;
-      padding: 0;
-    }
-
-    body {
-      background: #1a1c23;
-      color: #ffffff;
-      font-family: 'Gowun Dodum', sans-serif;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      overflow-x: hidden;
-      padding: 8px;
-    }
-
-    /* 상단 컨트롤 바 */
-    #top-bar {
-      width: 100%;
-      max-width: 1050px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 18px;
-      background: rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(12px);
-      border-radius: 14px;
-      margin-bottom: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.15);
-      box-shadow: 0 6px 24px rgba(0,0,0,0.3);
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .room-badge-group {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .room-badge {
-      font-family: 'Jua', sans-serif;
-      font-size: 1.1rem;
-      color: #f39c12;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      white-space: nowrap;
-    }
-
-    .player-tags-container {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .p-tag {
-      font-family: 'Jua', sans-serif;
-      font-size: 0.85rem;
-      padding: 3px 8px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.1);
-      color: #bdc3c7;
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      transition: all 0.2s ease;
-    }
-
-    .p-tag.active-p {
-      border-color: #f1c40f;
-      color: #f1c40f;
-      background: rgba(241, 196, 15, 0.25);
-      box-shadow: 0 0 10px rgba(241, 196, 15, 0.4);
-    }
-
-    .p-tag.is-me {
-      border-color: #2ecc71;
-    }
-
-    #status-banner {
-      font-family: 'Jua', sans-serif;
-      font-size: 1.1rem;
-      color: #ffeaa7;
-      text-align: center;
-      background: rgba(0,0,0,0.45);
-      padding: 6px 18px;
-      border-radius: 16px;
-      border: 1px solid rgba(241, 196, 15, 0.4);
-      box-shadow: 0 0 12px rgba(0,0,0,0.3);
-      white-space: nowrap;
-      transition: all 0.3s ease;
-    }
-
-    .turn-indicator {
-      font-family: 'Jua', sans-serif;
-      font-size: 1.2rem;
-      padding: 5px 14px;
-      border-radius: 18px;
-      background: #e74c3c;
-      color: #fff;
-      box-shadow: 0 0 12px rgba(231, 76, 60, 0.5);
-      animation: pulse-turn 1.5s infinite;
-      white-space: nowrap;
-    }
-
-    @keyframes pulse-turn {
-      0%, 100% { transform: scale(1); }
-      50% { transform: scale(1.03); }
-    }
-
-    /* 게임 보드 메인 컨테이너 */
-    #game-container {
-      position: relative;
-      width: 100%;
-      max-width: 1050px;
-      aspect-ratio: 1 / 1;
-      max-height: 85vh;
-      background-color: var(--board-bg);
-      border: 10px solid var(--board-border);
-      border-radius: 24px;
-      box-shadow: inset 0 0 50px rgba(0,0,0,0.35), 0 15px 40px rgba(0,0,0,0.6);
-      display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      grid-template-rows: repeat(7, 1fr);
-      gap: 4px;
-      padding: 8px;
-    }
-
-    .player-mat {
-      background: var(--mat-bg);
-      border: 2px solid var(--mat-border);
-      border-radius: 12px;
-      padding: 6px;
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      justify-content: space-around;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      position: relative;
-    }
-
-    .player-mat.p0-mat { grid-column: 2 / 8; grid-row: 7; }
-    .player-mat.p1-mat { grid-column: 1; grid-row: 2 / 7; flex-direction: column; }
-    .player-mat.p2-mat { grid-column: 2 / 8; grid-row: 1; }
-    .player-mat.p3-mat { grid-column: 8; grid-row: 2 / 7; flex-direction: column; }
-
-    .mat-header {
-      font-family: 'Jua', sans-serif;
-      font-size: 0.95rem;
-      color: #e0e0e0;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      white-space: nowrap;
-    }
-
-    .mat-slots-container {
-      display: flex;
-      gap: 6px;
-    }
-    .p1-mat .mat-slots-container, .p3-mat .mat-slots-container {
-      flex-direction: column;
-    }
-
-    .card-slot {
-      width: 58px;
-      height: 84px;
-      background: rgba(0, 0, 0, 0.45);
-      border: 2px dashed rgba(255, 255, 255, 0.3);
-      border-radius: 8px;
-      position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .card-slot.highlight-target {
-      border: 3px solid #f1c40f !important;
-      background: rgba(241, 196, 15, 0.25) !important;
-      box-shadow: 0 0 16px #f1c40f;
-      animation: glow-slot 0.8s infinite alternate;
-    }
-
-    @keyframes glow-slot {
-      from { transform: scale(1); }
-      to { transform: scale(1.06); }
-    }
-
-    .card-slot.slot-land-anim {
-      animation: slotLand 0.3s ease-out;
-    }
-    @keyframes slotLand {
-      0% { transform: scale(1.18); }
-      100% { transform: scale(1); }
-    }
-
-    .card-slot.slot-17-anim {
-      animation: score17Flash 0.6s ease-in-out;
-    }
-    @keyframes score17Flash {
-      0% { box-shadow: 0 0 0 rgba(241, 196, 15, 0); transform: scale(1); }
-      50% { box-shadow: 0 0 35px #f1c40f, inset 0 0 20px #f1c40f; transform: scale(1.15); border-color: #f1c40f; }
-      100% { box-shadow: 0 0 0 rgba(241, 196, 15, 0); transform: scale(1); }
-    }
-
-    .card-slot.slot-bust-anim {
-      animation: bustShake 0.4s ease-in-out;
-      border-color: #e74c3c !important;
-    }
-    @keyframes bustShake {
-      0%, 100% { transform: translateX(0); }
-      20%, 60% { transform: translateX(-6px); }
-      40%, 80% { transform: translateX(6px); }
-    }
-
-    .slot-sum-badge {
-      position: absolute;
-      top: -8px;
-      right: -6px;
-      background: #e74c3c;
-      color: #fff;
-      font-family: 'Jua', sans-serif;
-      font-size: 0.8rem;
-      padding: 1px 6px;
-      border-radius: 8px;
-      border: 1px solid #fff;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.5);
-      z-index: 10;
-    }
-
-    .acquired-box {
-      width: 62px;
-      height: 84px;
-      background: rgba(255, 255, 255, 0.12);
-      border: 2px solid rgba(255, 255, 255, 0.4);
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: #ffeaa7;
-      font-family: 'Jua', sans-serif;
-      font-size: 0.85rem;
-      text-align: center;
-      padding: 2px;
-    }
-
-    .acquired-count {
-      font-size: 1.3rem;
-      font-weight: 900;
-      color: #2ecc71;
-    }
-
-    .track-tile {
-      background: #fdfaf6;
-      border: 2px solid #5d4037;
-      border-radius: 8px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Jua', sans-serif;
-      font-size: 0.75rem;
-      color: #3e2723;
-      text-align: center;
-      padding: 2px;
-      position: relative;
-      box-shadow: inset 0 0 6px rgba(0,0,0,0.1), 0 3px 6px rgba(0,0,0,0.2);
-    }
-
-    .tile-start { background: #ffe082; color: #d84315; font-size: 0.85rem; }
-    .tile-white { background: #ffffff; }
-    .tile-grid { background: #e8eaf6; background-image: radial-gradient(#9fa8da 1px, transparent 1px); background-size: 6px 6px; }
-    .tile-pink { background: #f8bbd0; color: #880e4f; }
-    .tile-stripe { background: repeating-linear-gradient(45deg, #efebe9, #efebe9 5px, #d7ccc8 5px, #d7ccc8 10px); }
-    .tile-black { background: #263238; color: #eceff1; border-color: #000; }
-
-    .tile-icon {
-      font-size: 0.95rem;
-      line-height: 1;
-      margin-bottom: 1px;
-    }
-
-    .pawn-container {
-      position: absolute;
-      bottom: 2px;
-      left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 2px;
-      z-index: 30;
-    }
-
-    .player-pawn {
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      box-shadow: 0 0 6px rgba(0,0,0,0.8);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 0.6rem;
-      font-weight: bold;
-      color: #fff;
-      transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-
-    .player-pawn.pawn-hop {
-      animation: pawnJump 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    }
-
-    @keyframes pawnJump {
-      0% { transform: translateY(0) scale(1); }
-      50% { transform: translateY(-12px) scale(1.3); }
-      100% { transform: translateY(0) scale(1); }
-    }
-
-    .pawn-0 { background: #e74c3c; }
-    .pawn-1 { background: #3498db; }
-    .pawn-2 { background: #2ecc71; }
-    .pawn-3 { background: #f1c40f; color: #000; }
-
-    #center-area {
-      grid-column: 3 / 7;
-      grid-row: 3 / 6;
-      background: rgba(0, 0, 0, 0.22);
-      border-radius: 18px;
-      border: 2px dashed rgba(140, 106, 67, 0.6);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      padding: 14px;
-      position: relative;
-    }
-
-    .center-top-row {
-      width: 100%;
-      display: flex;
-      justify-content: space-around;
-      align-items: center;
-    }
-
-    .deck-stack {
-      width: 75px;
-      height: 105px;
-      background: linear-gradient(135deg, #2c3e50, #3498db);
-      border: 3px solid #fff;
-      border-radius: 10px;
-      box-shadow: 0 6px 16px rgba(0,0,0,0.5), -3px -3px 0 #1a252f;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: #fff;
-      font-family: 'Jua', sans-serif;
-      font-size: 1rem;
-      position: relative;
-    }
-    .deck-stack.black-deck {
-      background: linear-gradient(135deg, #000000, #434343);
-      border-color: #f1c40f;
-    }
-    .deck-count {
-      font-size: 0.8rem;
-      color: #f1c40f;
-      margin-top: 2px;
-    }
-
-    .discard-box {
-      width: 110px;
-      height: 75px;
-      background: rgba(189, 195, 199, 0.25);
-      border: 2px dashed #7f8c8d;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      color: #2c3e50;
-      font-family: 'Jua', sans-serif;
-      font-size: 1.1rem;
-    }
-
-    #center-card-showcase {
-      width: 115px;
-      height: 160px;
-      border-radius: 14px;
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(15px);
-      border: 3px solid #fff;
-      box-shadow: 0 12px 30px rgba(0,0,0,0.6);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      position: relative;
-      transition: all 0.3s ease;
-      z-index: 50;
-    }
-
-    #center-card-showcase.empty {
-      border: 2px dashed rgba(255,255,255,0.3);
-      background: rgba(0,0,0,0.1);
-      box-shadow: none;
-    }
-    #center-card-showcase.empty * {
-      display: none;
-    }
-
-    /* GPU 가속 비행 고스트 카드 */
-    .flying-card-ghost {
-      position: fixed;
-      z-index: 9999;
-      pointer-events: none;
-      margin: 0;
-      box-shadow: 0 18px 45px rgba(0,0,0,0.75);
-      transform-origin: top left; /* 원점을 좌상단으로 고정하여 정확한 트랜스폼 매핑 */
-      will-change: transform;
-    }
-
-    .glass-card {
-      width: 100%;
-      height: 100%;
-      border-radius: 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px;
-      font-family: 'Jua', sans-serif;
-      position: relative;
-      background: rgba(255, 255, 255, 0.25);
-      backdrop-filter: blur(8px);
-      box-shadow: inset 0 0 12px rgba(255,255,255,0.6);
-    }
-    .glass-card.color-green { border: 3px solid #2ecc71; color: #2ecc71; text-shadow: 0 0 8px rgba(46,204,113,0.8); }
-    .glass-card.color-yellow { border: 3px solid #f1c40f; color: #f1c40f; text-shadow: 0 0 8px rgba(241,196,15,0.8); }
-    .glass-card.color-blue { border: 3px solid #3498db; color: #3498db; text-shadow: 0 0 8px rgba(52,152,219,0.8); }
-    .glass-card.color-red { border: 3px solid #e74c3c; color: #e74c3c; text-shadow: 0 0 8px rgba(231,76,60,0.8); }
-    .glass-card.color-black { border: 3px solid #f39c12; color: #ffffff; background: rgba(0,0,0,0.85); text-shadow: 0 0 8px #f1c40f; }
-
-    .card-number {
-      font-size: 2.8rem;
-      font-weight: 900;
-      line-height: 1;
-    }
-    .card-corner {
-      font-size: 0.95rem;
-      align-self: flex-start;
-    }
-
-    .dice-container {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .hex-dice {
-      width: 52px;
-      height: 52px;
-      background: linear-gradient(135deg, #ffffff, #e0e0e0);
-      clip-path: polygon(30% 0%, 70% 0%, 100% 50%, 70% 100%, 30% 100%, 0% 50%);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Jua', sans-serif;
-      font-size: 1.8rem;
-      color: #d35400;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-      transition: transform 0.6s ease;
-    }
-    .hex-dice.rolling {
-      animation: dice-spin 0.6s ease-in-out;
-    }
-    @keyframes dice-spin {
-      0% { transform: rotate(0deg) scale(1); }
-      50% { transform: rotate(360deg) scale(1.3); }
-      100% { transform: rotate(720deg) scale(1); }
-    }
-
-    .btn-action {
-      font-family: 'Jua', sans-serif;
-      font-size: 1.1rem;
-      padding: 8px 20px;
-      border-radius: 12px;
-      border: none;
-      background: linear-gradient(135deg, #e67e22, #d35400);
-      color: #fff;
-      cursor: pointer;
-      box-shadow: 0 4px 14px rgba(211, 84, 0, 0.4);
-      transition: all 0.2s;
-    }
-    .btn-action:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 18px rgba(211, 84, 0, 0.6);
-    }
-    .btn-action:disabled {
-      background: #7f8c8d;
-      cursor: not-allowed;
-      box-shadow: none;
-      transform: none;
-    }
-
-    .modal-overlay {
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(0, 0, 0, 0.82);
-      backdrop-filter: blur(8px);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 1000;
-    }
-    .modal-card {
-      background: #2c3e50;
-      border: 3px solid #f39c12;
-      border-radius: 20px;
-      padding: 24px;
-      width: 90%;
-      max-width: 460px;
-      text-align: center;
-      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
-    }
-    .modal-card h2 {
-      font-family: 'Jua', sans-serif;
-      color: #f1c40f;
-      font-size: 1.8rem;
-      margin-bottom: 12px;
-    }
-    .input-group {
-      margin-bottom: 14px;
-      text-align: left;
-    }
-    .input-group label {
-      display: block;
-      font-size: 0.9rem;
-      margin-bottom: 4px;
-      color: #bdc3c7;
-    }
-    .input-control {
-      width: 100%;
-      padding: 10px;
-      border-radius: 8px;
-      border: 2px solid #34495e;
-      background: #1a252f;
-      color: #fff;
-      font-size: 1rem;
-    }
-
-    #toast-msg {
-      position: fixed;
-      top: 80px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #f1c40f;
-      color: #1a252f;
-      font-family: 'Jua', sans-serif;
-      font-size: 1.1rem;
-      padding: 8px 20px;
-      border-radius: 24px;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
-      z-index: 2000;
-      display: none;
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+<title>CHARACTER / GLOW & SCATTER FIREWORKS</title>
+<style>
+:root{color-scheme:dark;--accent:#9fc5ff}
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020309;color:#f2f6ff;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}
+canvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+</style>
 </head>
 <body>
-
-  <!-- 상단 컨트롤 바 -->
-  <div id="top-bar">
-    <div class="room-badge-group">
-      <div class="room-badge">
-        <span>🎲 방 코드: <strong id="display-room-code">----</strong></span>
-      </div>
-      <div id="player-tags-container" class="player-tags-container"></div>
-    </div>
-
-    <div id="status-banner">게임 시작을 기다리는 중...</div>
-
-    <div id="turn-badge" class="turn-indicator">대기 중...</div>
-  </div>
-
-  <!-- 메인 게임 보드 -->
-  <div id="game-container">
-
-    <!-- P2 Mat (Top) -->
-    <div class="player-mat p2-mat" id="mat-2">
-      <div class="mat-header">P3 <span id="p2-name">플레이어 3</span></div>
-      <div class="mat-slots-container">
-        <div class="card-slot" onclick="handleSlotClick(2, 0)" id="slot-2-0"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(2, 1)" id="slot-2-1"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(2, 2)" id="slot-2-2"><span class="slot-sum-badge">0</span></div>
-      </div>
-      <div class="acquired-box">
-        <div>17 완성</div>
-        <div class="acquired-count" id="acq-2">0회</div>
-      </div>
-    </div>
-
-    <!-- P1 Mat (Left) -->
-    <div class="player-mat p1-mat" id="mat-1">
-      <div class="mat-header">P2 <span id="p1-name">플레이어 2</span></div>
-      <div class="mat-slots-container">
-        <div class="card-slot" onclick="handleSlotClick(1, 0)" id="slot-1-0"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(1, 1)" id="slot-1-1"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(1, 2)" id="slot-1-2"><span class="slot-sum-badge">0</span></div>
-      </div>
-      <div class="acquired-box">
-        <div>17 완성</div>
-        <div class="acquired-count" id="acq-1">0회</div>
-      </div>
-    </div>
-
-    <!-- 중앙 게임 영역 -->
-    <div id="center-area">
-      <div class="center-top-row">
-        <div class="deck-stack" id="main-deck">
-          <span>일반 덱</span>
-          <span class="deck-count" id="deck-count-text">36 / 36</span>
-        </div>
-        <div class="deck-stack black-deck" id="black-deck">
-          <span>검정 덱</span>
-          <span class="deck-count" id="black-deck-count-text">9 / 9</span>
-        </div>
-        <div class="discard-box">
-          <span>버림!</span>
-          <span id="discard-count" style="font-size:0.85rem; color:#7f8c8d;">0장</span>
-        </div>
-      </div>
-
-      <!-- 가운데 크게 뜨는 뽑은 카드 전시 영역 -->
-      <div id="center-card-showcase" class="empty"></div>
-
-      <!-- 주사위 및 컨트롤 -->
-      <div class="dice-container">
-        <div class="hex-dice" id="dice-val">1</div>
-        <button class="btn-action" id="btn-roll" onclick="rollDice()">주사위 굴리기 🎲</button>
-      </div>
-    </div>
-
-    <!-- P3 Mat (Right) -->
-    <div class="player-mat p3-mat" id="mat-3">
-      <div class="mat-header">P4 <span id="p3-name">플레이어 4</span></div>
-      <div class="mat-slots-container">
-        <div class="card-slot" onclick="handleSlotClick(3, 0)" id="slot-3-0"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(3, 1)" id="slot-3-1"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(3, 2)" id="slot-3-2"><span class="slot-sum-badge">0</span></div>
-      </div>
-      <div class="acquired-box">
-        <div>17 완성</div>
-        <div class="acquired-count" id="acq-3">0회</div>
-      </div>
-    </div>
-
-    <!-- P0 Mat (Bottom - 내 매트) -->
-    <div class="player-mat p0-mat" id="mat-0">
-      <div class="mat-header">P1 <span id="p0-name">나 (플레이어 1)</span></div>
-      <div class="mat-slots-container">
-        <div class="card-slot" onclick="handleSlotClick(0, 0)" id="slot-0-0"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(0, 1)" id="slot-0-1"><span class="slot-sum-badge">0</span></div>
-        <div class="card-slot" onclick="handleSlotClick(0, 2)" id="slot-0-2"><span class="slot-sum-badge">0</span></div>
-      </div>
-      <div class="acquired-box">
-        <div>17 완성</div>
-        <div class="acquired-count" id="acq-0">0회</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- 로비 접속 모달 -->
-  <div class="modal-overlay" id="lobby-modal">
-    <div class="modal-card">
-      <h2>🎲 17 법칙 카드 멀티플레이</h2>
-      <p style="color:#bdc3c7; margin-bottom:16px; font-size:0.9rem;">
-        ★ 17을 가장 많이 만든 사람이 승리!<br>동률 시 본인 앞 슬롯 카드 수의 합이 높은 사람이 승리합니다.
-      </p>
-      
-      <div class="input-group">
-        <label>플레이어 닉네임</label>
-        <input type="text" id="input-nickname" class="input-control" placeholder="이름을 입력하세요" value="플레이어1">
-      </div>
-
-      <div class="input-group">
-        <label>방 코드 (참가 시 입력)</label>
-        <input type="text" id="input-room-code" class="input-control" placeholder="6자리 코드 입력">
-      </div>
-
-      <div style="display:flex; gap:10px; margin-top:20px;">
-        <button class="btn-action" style="flex:1;" onclick="createRoom()">방 만들기</button>
-        <button class="btn-action" style="flex:1; background:linear-gradient(135deg, #2980b9, #3498db);" onclick="joinRoom()">참가하기</button>
-      </div>
-      <button class="btn-action" style="width:100%; margin-top:10px; background:#27ae60;" onclick="startSinglePractice()">혼자 연습하기 (AI 3명)</button>
-    </div>
-  </div>
-
-  <!-- 게임 종료 승리 모달 -->
-  <div class="modal-overlay" id="gameover-modal" style="display:none;">
-    <div class="modal-card">
-      <h2>🎉 게임 종료!</h2>
-      <p id="gameover-reason" style="color:#f1c40f; margin-bottom:16px;">일반 카드 36장을 모두 소모하였습니다!</p>
-      <div id="final-leaderboard" style="text-align:left; background:rgba(0,0,0,0.3); padding:14px; border-radius:12px; margin-bottom:18px;"></div>
-      <button class="btn-action" onclick="location.reload()">새 게임 시작하기</button>
-    </div>
-  </div>
-
-  <div id="toast-msg">알림 메시지</div>
-
-  <script>
-    const TRACK_TILES = [
-      { id: 0, type: 'start', title: '시작 ➔', gridPos: { col: 2, row: 2 } },
-      { id: 1, type: 'white', title: '내칸', gridPos: { col: 3, row: 2 } },
-      { id: 2, type: 'grid', title: '남의칸', gridPos: { col: 4, row: 2 } },
-      { id: 3, type: 'black', title: '검정칸', gridPos: { col: 5, row: 2 } },
-      { id: 4, type: 'pink', title: '제일큰칸', gridPos: { col: 6, row: 2 } },
-      { id: 5, type: 'stripe', title: '제일작은칸', gridPos: { col: 7, row: 2 } },
-
-      { id: 6, type: 'white', title: '내칸', gridPos: { col: 7, row: 3 } },
-      { id: 7, type: 'grid', title: '남의칸', gridPos: { col: 7, row: 4 } },
-      { id: 8, type: 'black', title: '검정칸', gridPos: { col: 7, row: 5 } },
-      { id: 9, type: 'pink', title: '제일큰칸', gridPos: { col: 7, row: 6 } },
-
-      { id: 10, type: 'stripe', title: '제일작은칸', gridPos: { col: 6, row: 6 } },
-      { id: 11, type: 'white', title: '내칸', gridPos: { col: 5, row: 6 } },
-      { id: 12, type: 'grid', title: '남의칸', gridPos: { col: 4, row: 6 } },
-      { id: 13, type: 'black', title: '검정칸', gridPos: { col: 3, row: 6 } },
-      { id: 14, type: 'pink', title: '제일큰칸', gridPos: { col: 2, row: 6 } },
-
-      { id: 15, type: 'stripe', title: '제일작은칸', gridPos: { col: 2, row: 5 } },
-      { id: 16, type: 'white', title: '내칸', gridPos: { col: 2, row: 4 } },
-      { id: 17, type: 'grid', title: '남의칸', gridPos: { col: 2, row: 3 } }
-    ];
-
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    function playSound(type) {
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-
-      if (type === 'dice') {
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.12);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.12);
-      } else if (type === 'step') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(450, audioCtx.currentTime + 0.08);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.08);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.08);
-      } else if (type === 'place') {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(450, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(220, audioCtx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.35, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.12);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.12);
-      } else if (type === 'score17') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(523.25, audioCtx.currentTime);
-        osc.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2);
-        gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
-        osc.start(); osc.stop(audioCtx.currentTime + 0.4);
-      }
-    }
-
-    let peer = null;
-    let connections = [];
-    let hostConn = null;
-    let isHost = false;
-    let myPlayerIndex = 0;
-    let roomCode = '';
-
-    let gameState = {
-      players: [
-        { name: '플레이어 1', position: 0, slots: [[], [], []], made17Count: 0, isAi: false },
-        { name: '플레이어 2', position: 0, slots: [[], [], []], made17Count: 0, isAi: false },
-        { name: '플레이어 3', position: 0, slots: [[], [], []], made17Count: 0, isAi: false },
-        { name: '플레이어 4', position: 0, slots: [[], [], []], made17Count: 0, isAi: false }
-      ],
-      turn: 0,
-      phase: 'DICE',
-      deck: [],
-      blackDeck: [],
-      drawnCard: null,
-      discardCount: 0,
-      diceValue: 1,
-      isAnimating: false
-    };
-
-    function initDeck() {
-      const colors = ['green', 'yellow', 'blue', 'red'];
-      const deck = [];
-      colors.forEach(color => {
-        for (let num = 1; num <= 9; num++) {
-          deck.push({ color, num });
-        }
-      });
-      for (let i = deck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [deck[i], deck[j]] = [deck[j], deck[i]];
-      }
-
-      const blackDeck = [];
-      for (let num = 1; num <= 9; num++) {
-        blackDeck.push({ color: 'black', num });
-      }
-      for (let i = blackDeck.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [blackDeck[i], blackDeck[j]] = [blackDeck[j], blackDeck[i]];
-      }
-
-      gameState.deck = deck;
-      gameState.blackDeck = blackDeck;
-    }
-
-    function renderBoard() {
-      const container = document.getElementById('game-container');
-      
-      TRACK_TILES.forEach(tile => {
-        const el = document.createElement('div');
-        el.className = `track-tile tile-${tile.type}`;
-        el.style.gridColumn = tile.gridPos.col;
-        el.style.gridRow = tile.gridPos.row;
-        el.id = `tile-${tile.id}`;
-
-        let icon = '🎲';
-        if (tile.type === 'start') icon = '🚩';
-        else if (tile.type === 'white') icon = '🏠';
-        else if (tile.type === 'grid') icon = '⚔️';
-        else if (tile.type === 'pink') icon = '👑';
-        else if (tile.type === 'stripe') icon = '🌱';
-        else if (tile.type === 'black') icon = '💣';
-
-        el.innerHTML = `<div class="tile-icon">${icon}</div><div>${tile.title}</div><div class="pawn-container" id="pawn-box-${tile.id}"></div>`;
-        container.appendChild(el);
-      });
-
-      renderPawns();
-      updateUI();
-    }
-
-    function renderPawns() {
-      TRACK_TILES.forEach(t => {
-        const box = document.getElementById(`pawn-box-${t.id}`);
-        if (box) box.innerHTML = '';
-      });
-
-      gameState.players.forEach((p, idx) => {
-        const box = document.getElementById(`pawn-box-${p.position}`);
-        if (box) {
-          const pawn = document.createElement('div');
-          pawn.className = `player-pawn pawn-${idx}`;
-          pawn.innerText = `P${idx+1}`;
-          box.appendChild(pawn);
-        }
-      });
-    }
-
-    /* 카드 비행 애니메이션: 시작 좌표를 먼저 확보하고 다음 프레임부터 이동 */
-    function createFlyingCard(fromEl, toEl, cardData, onComplete) {
-      if (!fromEl || !toEl || !cardData) {
-        onComplete?.();
-        return;
-      }
-
-      // 중요: 출발 요소를 비우거나 숨기기 전에 두 요소의 좌표를 먼저 읽는다.
-      const fromRect = fromEl.getBoundingClientRect();
-      const toRect = toEl.getBoundingClientRect();
-
-      if (fromRect.width <= 0 || fromRect.height <= 0 ||
-          toRect.width <= 0 || toRect.height <= 0) {
-        console.warn('카드 비행 생략: 출발/도착 요소 크기가 0입니다.', {
-          from: { width: fromRect.width, height: fromRect.height },
-          to: { width: toRect.width, height: toRect.height }
-        });
-        onComplete?.();
-        return;
-      }
-
-      const ghost = document.createElement('div');
-      ghost.className = `flying-card-ghost glass-card color-${cardData.color}`;
-      Object.assign(ghost.style, {
-        position: 'fixed',
-        left: `${fromRect.left}px`,
-        top: `${fromRect.top}px`,
-        width: `${fromRect.width}px`,
-        height: `${fromRect.height}px`,
-        margin: '0',
-        zIndex: '99999',
-        pointerEvents: 'none',
-        opacity: '1',
-        transform: 'translate3d(0, 0, 0) scale(1) rotate(0deg)',
-        transformOrigin: 'top left',
-        willChange: 'transform, opacity'
-      });
-      ghost.innerHTML = `
-        <div class="card-corner">${String(cardData.color).toUpperCase()}</div>
-        <div class="card-number">${cardData.num}</div>
-      `;
-      document.body.appendChild(ghost);
-
-      const dx = toRect.left - fromRect.left;
-      const dy = toRect.top - fromRect.top;
-      const sx = toRect.width / fromRect.width;
-      const sy = toRect.height / fromRect.height;
-      let completed = false;
-      let safetyTimer = null;
-
-      const finish = () => {
-        if (completed) return;
-        completed = true;
-        if (safetyTimer !== null) clearTimeout(safetyTimer);
-        ghost.remove();
-        onComplete?.();
-      };
-
-      // 한 프레임 동안 시작 위치를 실제 렌더링한 다음 애니메이션을 시작해야
-      // 브라우저가 시작/종료 상태를 합쳐 순간이동처럼 처리하지 않는다.
-      requestAnimationFrame(() => {
-        // 레이아웃을 확정해 시작 프레임을 생성
-        void ghost.getBoundingClientRect();
-
-        try {
-          const animation = ghost.animate([
-            {
-              transform: 'translate3d(0px, 0px, 0) scale(1, 1) rotate(0deg)',
-              opacity: 1
-            },
-            {
-              transform: `translate3d(${dx}px, ${dy}px, 0) scale(${sx}, ${sy}) rotate(4deg)`,
-              opacity: 1
-            }
-          ], {
-            duration: 850,
-            easing: 'cubic-bezier(0.22, 1, 0.36, 1)',
-            fill: 'forwards'
-          });
-
-          animation.onfinish = finish;
-          animation.oncancel = finish;
-          // 비정상적으로 finish 이벤트가 오지 않을 때만 사용하는 안전망
-          safetyTimer = setTimeout(finish, 1800);
-        } catch (error) {
-          console.error('카드 비행 애니메이션 실행 실패:', error);
-          finish();
-        }
-      });
-    }
-
-    function flyCardFromDeckToCenter(isBlack, cardData, callback) {
-      const deckEl = document.getElementById(isBlack ? 'black-deck' : 'main-deck');
-      const showcaseEl = document.getElementById('center-card-showcase');
-      if (!deckEl || !showcaseEl) {
-        callback?.();
-        return;
-      }
-      createFlyingCard(deckEl, showcaseEl, cardData, callback);
-    }
-
-    function flyCardFromCenterToSlot(targetPIdx, targetSIdx, callback) {
-      const showcaseEl = document.getElementById('center-card-showcase');
-      const targetSlotEl = document.getElementById(`slot-${targetPIdx}-${targetSIdx}`);
-      const cardData = gameState.drawnCard;
-
-      if (!showcaseEl || !targetSlotEl || !cardData) {
-        callback?.();
-        return;
-      }
-
-      // createFlyingCard가 출발 좌표를 읽은 뒤 중앙 카드를 비운다.
-      // 호출 직후 고스트가 만들어지므로 실제 중앙 카드는 비행 중 중복 노출되지 않는다.
-      createFlyingCard(showcaseEl, targetSlotEl, cardData, callback);
-      showcaseEl.classList.add('empty');
-      showcaseEl.innerHTML = '';
-    }
-
-    async function animatePawnStep(pIdx, steps) {
-      const startPos = gameState.players[pIdx].position;
-      for (let i = 1; i <= steps; i++) {
-        const nextPos = (startPos + i) % TRACK_TILES.length;
-        gameState.players[pIdx].position = nextPos;
-        renderPawns();
-        playSound('step');
-
-        const pawnEl = document.querySelector(`.pawn-${pIdx}`);
-        if (pawnEl) {
-          pawnEl.classList.add('pawn-hop');
-          setTimeout(() => pawnEl.classList.remove('pawn-hop'), 200);
-        }
-        await new Promise(res => setTimeout(res, 220));
-      }
-    }
-
-    function rollDice() {
-      if (gameState.turn !== myPlayerIndex) {
-        showToast("당신의 순서가 아닙니다!");
-        return;
-      }
-      if (gameState.phase !== 'DICE' || gameState.isAnimating) return;
-
-      if (!isHost) {
-        if (hostConn) {
-          hostConn.send({ type: 'REQUEST_ROLL' });
-        }
-        return;
-      }
-
-      executeRollLogic();
-    }
-
-    async function executeRollLogic() {
-      if (gameState.isAnimating) return;
-      gameState.isAnimating = true;
-      playSound('dice');
-
-      const diceEl = document.getElementById('dice-val');
-      diceEl.classList.add('rolling');
-      document.getElementById('btn-roll').disabled = true;
-
-      await new Promise(res => setTimeout(res, 600));
-      diceEl.classList.remove('rolling');
-
-      const diceOptions = [1, 1, 2, 2, 3, 3];
-      const rolled = diceOptions[Math.floor(Math.random() * diceOptions.length)];
-      gameState.diceValue = rolled;
-      diceEl.innerText = rolled;
-
-      const activeIdx = gameState.turn;
-      await animatePawnStep(activeIdx, rolled);
-
-      const landedTile = TRACK_TILES[gameState.players[activeIdx].position];
-      showToast(`${gameState.players[activeIdx].name}: ${landedTile.title} 칸 도착!`);
-
-      const isBlackDraw = (landedTile.type === 'black');
-      let drawn = null;
-
-      if (isBlackDraw) {
-        if (gameState.blackDeck.length > 0) {
-          drawn = gameState.blackDeck.pop();
-        } else {
-          showToast("검정 카드가 모두 소모되었습니다.");
-        }
-      } else {
-        if (gameState.deck.length > 0) {
-          drawn = gameState.deck.pop();
-        } else {
-          showToast("일반 덱 카드가 모두 소모되었습니다.");
-        }
-      }
-
-      if (drawn) {
-        flyCardFromDeckToCenter(isBlackDraw, drawn, () => {
-          gameState.drawnCard = drawn;
-          gameState.phase = 'PLACE';
-          gameState.isAnimating = false;
-          broadcastState();
-          updateUI();
-          checkAiTurn();
-        });
-      } else {
-        if (gameState.deck.length === 0) {
-          triggerGameOver("일반 카드 36장을 모두 소모하여 게임이 종료되었습니다!");
-          gameState.isAnimating = false;
-          broadcastState();
-          return;
-        }
-        gameState.phase = 'DICE';
-        gameState.turn = (gameState.turn + 1) % 4;
-        gameState.isAnimating = false;
-        broadcastState();
-        updateUI();
-        checkAiTurn();
-      }
-    }
-
-    function updateUI() {
-      document.getElementById('deck-count-text').innerText = `${gameState.deck.length} / 36`;
-      document.getElementById('black-deck-count-text').innerText = `${gameState.blackDeck.length} / 9`;
-      document.getElementById('discard-count').innerText = `${gameState.discardCount}장`;
-
-      const isMyTurn = gameState.turn === myPlayerIndex;
-      const turnBadge = document.getElementById('turn-badge');
-      const activeP = gameState.players[gameState.turn];
-      
-      turnBadge.innerText = isMyTurn ? `🔥 나의 턴 (P${myPlayerIndex+1})` : `⏳ ${activeP.name} 턴`;
-      turnBadge.style.background = isMyTurn ? '#e74c3c' : '#34495e';
-
-      const btnRoll = document.getElementById('btn-roll');
-      btnRoll.disabled = !isMyTurn || gameState.phase !== 'DICE' || gameState.isAnimating;
-
-      const tagsContainer = document.getElementById('player-tags-container');
-      if (tagsContainer) {
-        let tagsHtml = '';
-        gameState.players.forEach((p, idx) => {
-          const isTurn = gameState.turn === idx;
-          const isMe = myPlayerIndex === idx;
-          const typeText = p.isAi ? 'AI' : (isMe ? '나' : '접속');
-          const classes = `p-tag ${isTurn ? 'active-p' : ''} ${isMe ? 'is-me' : ''}`;
-          tagsHtml += `<div class="${classes}">P${idx+1}: ${p.name.replace(' (나)', '')} (${typeText})</div>`;
-        });
-        tagsContainer.innerHTML = tagsHtml;
-      }
-
-      const showcase = document.getElementById('center-card-showcase');
-      if (gameState.drawnCard && !gameState.isAnimating) {
-        showcase.classList.remove('empty');
-        const c = gameState.drawnCard;
-        showcase.innerHTML = `
-          <div class="glass-card color-${c.color}">
-            <div class="card-corner">${c.color.toUpperCase()}</div>
-            <div class="card-number">${c.num}</div>
-            <div style="font-size:0.8rem;">P${gameState.turn+1} 뽑음</div>
-          </div>
-        `;
-      } else if (!gameState.drawnCard) {
-        showcase.classList.add('empty');
-        showcase.innerHTML = '';
-      }
-
-      gameState.players.forEach((p, pIdx) => {
-        document.getElementById(`p${pIdx}-name`).innerText = p.name;
-        document.getElementById(`acq-${pIdx}`).innerText = `${p.made17Count || 0}회`;
-
-        p.slots.forEach((slot, sIdx) => {
-          const slotEl = document.getElementById(`slot-${pIdx}-${sIdx}`);
-          slotEl.classList.remove('highlight-target');
-
-          const sum = slot.reduce((acc, card) => acc + card.num, 0);
-          
-          let cardsHtml = '';
-          if (slot.length > 0) {
-            const topCard = slot[slot.length - 1];
-            cardsHtml = `
-              <div class="glass-card color-${topCard.color}" style="width:100%; height:100%; font-size:0.75rem;">
-                <div class="card-number" style="font-size:1.8rem;">${topCard.num}</div>
-                <div style="font-size:0.6rem;">${slot.length}장</div>
-              </div>
-            `;
-          }
-
-          slotEl.innerHTML = `
-            ${cardsHtml}
-            <span class="slot-sum-badge">${sum}</span>
-          `;
-        });
-      });
-
-      const statusBanner = document.getElementById('status-banner');
-      if (isMyTurn && gameState.phase === 'PLACE' && gameState.drawnCard) {
-        statusBanner.innerText = "👉 가운데 카드를 놓을 슬롯을 선택하세요!";
-        statusBanner.style.borderColor = "#f1c40f";
-        highlightValidSlots();
-      } else if (isMyTurn && gameState.phase === 'DICE') {
-        statusBanner.innerText = "🎲 주사위를 굴려주세요!";
-        statusBanner.style.borderColor = "#2ecc71";
-      } else {
-        statusBanner.innerText = `⏳ ${activeP.name}이(가) 행동 중입니다...`;
-        statusBanner.style.borderColor = "rgba(255, 255, 255, 0.2)";
-      }
-    }
-
-    function getValidSlotsForPlayer(pIdx) {
-      const curTile = TRACK_TILES[gameState.players[pIdx].position];
-      const validList = [];
-      
-      if (curTile.type === 'white' || curTile.type === 'start') {
-        [0, 1, 2].forEach(sIdx => validList.push({ pIdx, sIdx }));
-      } else if (curTile.type === 'grid') {
-        [0, 1, 2, 3].forEach(tpIdx => {
-          if (tpIdx !== pIdx) {
-            [0, 1, 2].forEach(sIdx => validList.push({ pIdx: tpIdx, sIdx }));
-          }
-        });
-      } else if (curTile.type === 'pink') {
-        let maxVal = -1;
-        gameState.players.forEach(p => p.slots.forEach(s => {
-          const sum = s.reduce((a, c) => a + c.num, 0);
-          if (sum > maxVal) maxVal = sum;
-        }));
-        gameState.players.forEach((p, tpIdx) => p.slots.forEach((s, sIdx) => {
-          const sum = s.reduce((a, c) => a + c.num, 0);
-          if (sum === maxVal) validList.push({ pIdx: tpIdx, sIdx });
-        }));
-      } else if (curTile.type === 'stripe') {
-        let minVal = 999;
-        gameState.players.forEach(p => p.slots.forEach(s => {
-          const sum = s.reduce((a, c) => a + c.num, 0);
-          if (sum < minVal) minVal = sum;
-        }));
-        gameState.players.forEach((p, tpIdx) => p.slots.forEach((s, sIdx) => {
-          const sum = s.reduce((a, c) => a + c.num, 0);
-          if (sum === minVal) validList.push({ pIdx: tpIdx, sIdx });
-        }));
-      } else if (curTile.type === 'black' && gameState.drawnCard) {
-        const num = gameState.drawnCard.num;
-        let col = 0;
-        if ([2, 5, 8].includes(num)) col = 1;
-        else if ([3, 6, 9].includes(num)) col = 2;
-        validList.push({ pIdx: pIdx, sIdx: col });
-      }
-
-      if (validList.length === 0) {
-        [0, 1, 2].forEach(sIdx => validList.push({ pIdx, sIdx }));
-      }
-      return validList;
-    }
-
-    function highlightValidSlots() {
-      const validList = getValidSlotsForPlayer(myPlayerIndex);
-      validList.forEach(item => {
-        const el = document.getElementById(`slot-${item.pIdx}-${item.sIdx}`);
-        if (el) el.classList.add('highlight-target');
-      });
-    }
-
-    function handleSlotClick(targetPlayerIdx, targetSlotIdx) {
-      if (gameState.turn !== myPlayerIndex || gameState.isAnimating) return;
-      if (gameState.phase !== 'PLACE' || !gameState.drawnCard) return;
-
-      const slotEl = document.getElementById(`slot-${targetPlayerIdx}-${targetSlotIdx}`);
-      if (!slotEl || !slotEl.classList.contains('highlight-target')) {
-        showToast("해당 슬롯에는 카드를 올릴 수 없습니다!");
-        return;
-      }
-
-      if (!isHost) {
-        if (hostConn) {
-          hostConn.send({ type: 'REQUEST_PLACE', targetPlayerIdx, targetSlotIdx });
-        }
-        return;
-      }
-
-      placeCardInSlot(targetPlayerIdx, targetSlotIdx);
-    }
-
-    function placeCardInSlot(targetPlayerIdx, targetSlotIdx) {
-      if (gameState.isAnimating) return;
-      gameState.isAnimating = true;
-
-      flyCardFromCenterToSlot(targetPlayerIdx, targetSlotIdx, () => {
-        const card = gameState.drawnCard;
-        if (!card) {
-          gameState.isAnimating = false;
-          return;
-        }
-
-        const targetSlot = gameState.players[targetPlayerIdx].slots[targetSlotIdx];
-        targetSlot.push(card);
-        playSound('place');
-        gameState.drawnCard = null;
-
-        const targetSlotEl = document.getElementById(`slot-${targetPlayerIdx}-${targetSlotIdx}`);
-        if (targetSlotEl) targetSlotEl.classList.add('slot-land-anim');
-
-        const sum = targetSlot.reduce((a, c) => a + c.num, 0);
-        if (sum === 17) {
-          playSound('score17');
-          gameState.players[gameState.turn].made17Count = (gameState.players[gameState.turn].made17Count || 0) + 1;
-          gameState.players[targetPlayerIdx].slots[targetSlotIdx] = [];
-          if (targetSlotEl) targetSlotEl.classList.add('slot-17-anim');
-          showToast(`🎉 17 법칙 성립! ${gameState.players[gameState.turn].name}이(가) 17을 완성했습니다!`);
-        } else if (sum > 17) {
-          gameState.discardCount += targetSlot.length;
-          gameState.players[targetPlayerIdx].slots[targetSlotIdx] = [];
-          if (targetSlotEl) targetSlotEl.classList.add('slot-bust-anim');
-          showToast(`💥 17 초과 버림! 카드가 버려졌습니다.`);
-        }
-
-        setTimeout(() => {
-          if (targetSlotEl) {
-            targetSlotEl.classList.remove('slot-land-anim', 'slot-17-anim', 'slot-bust-anim');
-          }
-
-          gameState.isAnimating = false;
-
-          if (gameState.deck.length === 0 && !gameState.drawnCard) {
-            broadcastState();
-            updateUI();
-            triggerGameOver("일반 카드(4세트 36장)를 모두 소모하여 게임이 종료되었습니다!");
-            return;
-          }
-
-          gameState.phase = 'DICE';
-          gameState.turn = (gameState.turn + 1) % 4;
-          broadcastState();
-          updateUI();
-
-          checkAiTurn();
-        }, 450);
-      });
-    }
-
-    /* ★ AI(컴퓨터) 턴 자동 진행 스케줄러 ★ */
-    function checkAiTurn() {
-      const currentP = gameState.players[gameState.turn];
-      if (currentP && currentP.isAi && isHost) {
-        setTimeout(() => {
-          if (gameState.isAnimating) {
-            checkAiTurn();
-            return;
-          }
-
-          if (gameState.phase === 'DICE') {
-            executeRollLogic();
-          } else if (gameState.phase === 'PLACE' && gameState.drawnCard) {
-            const validSlots = getValidSlotsForPlayer(gameState.turn);
-            if (validSlots.length > 0) {
-              const choice = validSlots[Math.floor(Math.random() * validSlots.length)];
-              placeCardInSlot(choice.pIdx, choice.sIdx);
-            }
-          }
-        }, 850);
-      }
-    }
-
-    function triggerGameOver(reason) {
-      document.getElementById('gameover-reason').innerText = reason;
-      
-      const sorted = [...gameState.players].sort((a, b) => {
-        const countA = a.made17Count || 0;
-        const countB = b.made17Count || 0;
-        if (countB !== countA) {
-          return countB - countA;
-        }
-        const sumA = a.slots.flat().reduce((acc, c) => acc + c.num, 0);
-        const sumB = b.slots.flat().reduce((acc, c) => acc + c.num, 0);
-        return sumB - sumA;
-      });
-
-      let html = '<ol style="padding-left:20px;">';
-      sorted.forEach((p, i) => {
-        const slotSum = p.slots.flat().reduce((acc, c) => acc + c.num, 0);
-        const count = p.made17Count || 0;
-        html += `<li style="font-size:1rem; margin-bottom:8px; color:${i===0?'#f1c40f':'#fff'}">
-          <strong>${p.name}</strong> - 17 완성: <strong>${count}회</strong> (슬롯 카드 합: ${slotSum}) ${i===0?'👑 (최종 승리!)':''}
-        </li>`;
-      });
-      html += '</ol>';
-
-      document.getElementById('final-leaderboard').innerHTML = html;
-      document.getElementById('gameover-modal').style.display = 'flex';
-    }
-
-    function createRoom() {
-      const name = document.getElementById('input-nickname').value || '방장';
-      roomCode = Math.floor(100000 + Math.random() * 900000).toString();
-      isHost = true;
-      myPlayerIndex = 0;
-
-      gameState.players[0].name = `${name} (나)`;
-
-      initPeer(roomCode);
-    }
-
-    function joinRoom() {
-      const name = document.getElementById('input-nickname').value || '참가자';
-      const code = document.getElementById('input-room-code').value.trim();
-      if (!code) {
-        showToast("방 코드를 입력해주세요!");
-        return;
-      }
-      roomCode = code;
-      isHost = false;
-
-      initPeer(null, code, name);
-    }
-
-    function startSinglePractice() {
-      const name = document.getElementById('input-nickname').value || '플레이어1';
-      isHost = true;
-      myPlayerIndex = 0;
-      gameState.players[0].name = `${name} (나)`;
-      gameState.players[1] = { name: '컴퓨터 1', position: 0, slots: [[],[],[]], made17Count: 0, isAi: true };
-      gameState.players[2] = { name: '컴퓨터 2', position: 0, slots: [[],[],[]], made17Count: 0, isAi: true };
-      gameState.players[3] = { name: '컴퓨터 3', position: 0, slots: [[],[],[]], made17Count: 0, isAi: true };
-
-      initDeck();
-      document.getElementById('lobby-modal').style.display = 'none';
-      document.getElementById('display-room-code').innerText = '싱글 연습';
-      renderBoard();
-    }
-
-    function initPeer(customId, targetHostCode = null, myName = '') {
-      peer = new Peer(customId ? `glass-card-${customId}` : undefined);
-
-      peer.on('open', (id) => {
-        document.getElementById('lobby-modal').style.display = 'none';
-        document.getElementById('display-room-code').innerText = roomCode;
-
-        if (isHost) {
-          initDeck();
-          renderBoard();
-          showToast(`방이 생성되었습니다! 방 코드: ${roomCode}`);
-        } else {
-          hostConn = peer.connect(`glass-card-${targetHostCode}`);
-          hostConn.on('open', () => {
-            hostConn.send({ type: 'JOIN', name: myName });
-          });
-          hostConn.on('data', handleData);
-        }
-      });
-
-      peer.on('connection', (conn) => {
-        connections.push(conn);
-        conn.on('data', (data) => handleHostData(conn, data));
-      });
-    }
-
-    function handleHostData(conn, data) {
-      if (data.type === 'JOIN') {
-        const newIdx = gameState.players.findIndex(p => p.name.includes('플레이어') && !p.isAi);
-        if (newIdx !== -1) {
-          gameState.players[newIdx].name = data.name;
-          conn.send({ type: 'INIT_INDEX', index: newIdx });
-          broadcastState();
-          updateUI();
-          showToast(`${data.name} 님이 참가했습니다!`);
-        }
-      } else if (data.type === 'REQUEST_ROLL') {
-        executeRollLogic();
-      } else if (data.type === 'REQUEST_PLACE') {
-        placeCardInSlot(data.targetPlayerIdx, data.targetSlotIdx);
-      }
-    }
-
-    function handleData(data) {
-      if (data.type === 'INIT_INDEX') {
-        myPlayerIndex = data.index;
-        renderBoard();
-      } else if (data.type === 'SYNC') {
-        gameState = data.state;
-        renderPawns();
-        updateUI();
-      }
-    }
-
-    function broadcastState() {
-      if (isHost) {
-        connections.forEach(conn => {
-          conn.send({ type: 'SYNC', state: gameState });
-        });
-      }
-    }
-
-    function showToast(msg) {
-      const toast = document.getElementById('toast-msg');
-      toast.innerText = msg;
-      toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, 2500);
-    }
-  </script>
+<canvas id="scene" aria-label="인터랙티브 코드 아트 불꽃놀이"></canvas>
+
+<script>
+(()=>{'use strict';
+const canvas=document.querySelector('#scene'),ctx=canvas.getContext('2d',{alpha:false});
+// 원본 HTML의 기본 설정값을 그대로 사용합니다. UI만 제거했습니다.
+const state={opacity:0.85,density:140,power:1.15,trail:1.4,glow:8,gravity:65};
+const rand=(a,b)=>a+Math.random()*(b-a);const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
+const palettes=[ [190,210,231], [325,343,17], [35,49,60], [255,280,308], [130,155,183], [0,18,47] ];
+let W=0,H=0,dpr=1,cellW=9,cellH=12,cols=0,rows=0,light=[],particles=[],rockets=[],rings=[],flashes=[],autoOn=true,autoClock=0,elapsed=0;
+const bg='#020309',glyphs=['.','·','+','*','o','0','8','@','#'];
+function resize(){
+ W=innerWidth;H=innerHeight;dpr=Math.min(devicePixelRatio||1,2);
+ canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
+ cellW=W<560?8:9;cellH=W<560?11:12;cols=Math.ceil(W/cellW);rows=Math.ceil(H/cellH);
+ light=Array.from({length:cols*rows},()=>({a:0,h:210,s:85}));
+ ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+}
+addEventListener('resize',resize,{passive:true});resize();
+function stamp(x,y,h,amount=1,sat=90){
+ const gx=Math.floor(x/cellW),gy=Math.floor(y/cellH);
+ if(gx<0||gx>=cols||gy<0||gy>=rows)return;
+ const p=light[gy*cols+gx];p.a=clamp(p.a+amount,0,1.65);p.h=h;p.s=sat;
+}
+class Spark{
+ constructor(x,y,vx,vy,h,opts={}){
+  this.x=x;this.y=y;this.px=x;this.py=y;this.vx=vx;this.vy=vy;this.h=h;
+  this.life=opts.life??rand(0.7,1.55);this.age=0;
+  this.drag=opts.drag??rand(0.72,1.65);this.size=opts.size??1;this.crackle=opts.crackle??false;
+  this.twinkle=Math.random()*Math.PI*2;this.gravityScale=opts.gravityScale??1;this.sat=opts.sat??90;
+ }
+ update(dt){
+  this.age+=dt;this.px=this.x;this.py=this.y;
+  const damp=Math.exp(-this.drag*dt);this.vx*=damp;this.vy*=damp;
+  this.vy+=state.gravity*this.gravityScale*dt;
+  this.x+=this.vx*dt;this.y+=this.vy*dt;
+  const left=clamp(1-this.age/this.life,0,1),twinkle=0.78+0.22*Math.sin(this.twinkle+this.age*25);
+  const steps=Math.max(1,Math.ceil(Math.hypot(this.x-this.px,this.y-this.py)/Math.max(cellW,cellH)*1.4));
+  for(let i=0;i<=steps;i++){
+   const t=i/steps;
+   stamp(this.px+(this.x-this.px)*t,this.py+(this.y-this.py)*t,this.h,(0.16+0.53*left)*this.size*twinkle/Math.sqrt(steps),this.sat);
+  }
+  if(this.crackle && left<0.42 && Math.random()<dt*1.6 && particles.length<2700){
+   for(let n=0;n<3;n++)particles.push(new Spark(this.x,this.y,rand(-55,55),rand(-55,55),this.h+rand(-15,15),{life:rand(0.12,0.32),size:0.5,drag:3,gravityScale:0.4}));
+   this.crackle=false;
+  }
+  return this.age<this.life && this.y<H+20;
+ }
+}
+// 캐릭터의 색상/표정을 픽셀에서 추출한 순수 파티클 좌표입니다.
+// 원본 사진은 웹 페이지에 포함하거나 그리지 않습니다.
+const mascotPoints=[[[-0.1694,-0.5262,118,157,171,0],[0.0121,-0.3448,249,251,250,0],[0.3387,-0.3448,254,254,254,0],[0.375,-0.3448,254,254,254,0],[-0.0242,-0.3085,255,255,255,0],[0.0121,-0.3085,255,255,255,0],[0.0484,-0.3085,254,254,254,0],[0.0847,-0.3085,255,255,255,0],[0.2661,-0.3085,255,255,255,0],[0.3024,-0.3085,255,253,254,0],[0.3387,-0.3085,255,255,255,0],[0.375,-0.3085,255,255,255,0],[0.4113,-0.3085,255,255,255,0],[-0.3871,-0.2722,255,255,255,0],[-0.0968,-0.2722,255,255,253,0],[-0.0605,-0.2722,254,254,252,0],[-0.0242,-0.2722,255,255,255,0],[0.0121,-0.2722,255,255,255,0],[0.0484,-0.2722,255,255,255,0],[0.0847,-0.2722,255,255,255,0],[0.121,-0.2722,255,255,255,0],[0.1573,-0.2722,255,255,255,0],[0.1935,-0.2722,255,255,255,0],[0.2298,-0.2722,255,255,255,0],[0.2661,-0.2722,255,255,255,0],[0.3024,-0.2722,255,255,255,0],[0.3387,-0.2722,255,255,255,0],[0.375,-0.2722,255,255,255,0],[0.4113,-0.2722,255,255,255,0],[-0.4234,-0.2359,255,255,255,0],[-0.3871,-0.2359,255,255,255,0],[-0.3508,-0.2359,255,255,255,0],[-0.3145,-0.2359,254,254,254,0],[-0.2782,-0.2359,254,254,254,0],[-0.2419,-0.2359,254,254,254,0],[-0.2056,-0.2359,254,254,254,0],[-0.1694,-0.2359,255,255,253,0],[-0.1331,-0.2359,247,247,245,0],[-0.0968,-0.2359,254,254,254,0],[-0.0605,-0.2359,255,255,255,0],[-0.0242,-0.2359,255,255,255,0],[0.0121,-0.2359,255,255,255,0],[0.0484,-0.2359,255,255,255,0],[0.0847,-0.2359,255,255,255,0],[0.121,-0.2359,234,234,234,0],[0.1573,-0.2359,254,254,254,0],[0.1935,-0.2359,255,255,255,0],[0.2298,-0.2359,255,255,255,0],[0.2661,-0.2359,255,255,255,0],[0.3024,-0.2359,255,255,255,0],[0.3387,-0.2359,255,255,255,0],[0.375,-0.2359,255,255,255,0],[0.4113,-0.2359,255,255,255,0],[0.4476,-0.2359,252,251,252,0],[-0.4234,-0.1996,255,255,255,0],[-0.3871,-0.1996,255,255,255,0],[-0.3508,-0.1996,255,255,255,0],[-0.3145,-0.1996,255,255,255,0],[-0.2782,-0.1996,255,255,255,0],[-0.2419,-0.1996,255,255,255,0],[-0.2056,-0.1996,255,255,255,0],[-0.1694,-0.1996,255,255,255,0],[-0.1331,-0.1996,255,255,255,0],[-0.0968,-0.1996,254,254,254,0],[-0.0605,-0.1996,255,255,255,0],[-0.0242,-0.1996,255,255,255,0],[0.0121,-0.1996,255,255,255,0],[0.0484,-0.1996,255,255,255,0],[0.0847,-0.1996,255,255,255,0],[0.121,-0.1996,255,255,255,0],[0.1573,-0.1996,255,255,255,0],[0.1935,-0.1996,255,255,255,0],[0.2298,-0.1996,255,255,255,0],[0.2661,-0.1996,255,255,255,0],[0.3024,-0.1996,255,255,255,0],[0.3387,-0.1996,255,255,255,0],[0.375,-0.1996,255,255,255,0],[0.4113,-0.1996,255,255,255,0],[0.4476,-0.1996,255,255,255,0],[-0.4597,-0.1633,255,255,255,0],[-0.4234,-0.1633,255,255,255,0],[-0.3871,-0.1633,255,255,255,0],[-0.3508,-0.1633,255,255,255,0],[-0.3145,-0.1633,255,255,255,0],[-0.2782,-0.1633,255,255,255,0],[-0.2419,-0.1633,255,255,255,0],[-0.2056,-0.1633,255,255,255,0],[-0.1694,-0.1633,255,255,255,0],[-0.1331,-0.1633,255,255,255,0],[-0.0968,-0.1633,255,255,255,0],[-0.0605,-0.1633,255,255,255,0],[-0.0242,-0.1633,255,255,255,0],[0.0121,-0.1633,255,255,255,0],[0.0484,-0.1633,255,255,255,0],[0.0847,-0.1633,255,255,255,0],[0.121,-0.1633,255,255,255,0],[0.1573,-0.1633,255,255,255,0],[0.1935,-0.1633,253,253,253,0],[0.2298,-0.1633,255,255,255,0],[0.2661,-0.1633,255,255,255,0],[0.3024,-0.1633,255,255,254,0],[0.3387,-0.1633,255,255,255,0],[0.375,-0.1633,255,255,253,0],[0.4113,-0.1633,255,255,255,0],[0.4476,-0.1633,255,255,255,0],[-0.4597,-0.127,255,255,255,0],[-0.4234,-0.127,255,255,255,0],[-0.3871,-0.127,255,255,255,0],[-0.3508,-0.127,255,255,255,0],[-0.3145,-0.127,255,255,255,0],[-0.2782,-0.127,255,255,255,0],[-0.2419,-0.127,255,255,255,0],[-0.2056,-0.127,255,255,255,0],[-0.0605,-0.127,252,251,252,0],[-0.0242,-0.127,255,255,255,0],[0.0121,-0.127,255,255,255,0],[0.0484,-0.127,255,255,255,0],[0.0847,-0.127,255,255,255,0],[0.121,-0.127,248,248,248,0],[0.1935,-0.127,196,196,196,0],[0.2298,-0.127,246,246,244,0],[0.375,-0.127,255,255,254,0],[0.4113,-0.127,255,255,255,0],[0.4476,-0.127,255,255,255,0],[-0.4597,-0.0907,255,255,255,0],[-0.4234,-0.0907,255,255,255,0],[-0.3871,-0.0907,255,255,255,0],[-0.3508,-0.0907,255,255,255,0],[-0.3145,-0.0907,255,255,255,0],[-0.2782,-0.0907,255,255,255,0],[-0.2419,-0.0907,255,255,255,0],[-0.2056,-0.0907,255,255,255,0],[-0.1331,-0.0907,255,255,255,0],[-0.0605,-0.0907,254,254,254,0],[-0.0242,-0.0907,255,255,255,0],[0.0121,-0.0907,255,255,255,0],[0.0484,-0.0907,255,255,255,0],[0.0847,-0.0907,255,255,255,0],[0.121,-0.0907,255,255,255,0],[0.1573,-0.0907,255,255,255,0],[0.1935,-0.0907,253,255,255,0],[0.375,-0.0907,252,255,250,0],[0.4113,-0.0907,255,255,255,0],[0.4476,-0.0907,255,255,255,0],[-0.4597,-0.0544,255,255,255,0],[-0.4234,-0.0544,255,255,255,0],[-0.3871,-0.0544,255,255,255,0],[-0.3508,-0.0544,255,255,255,0],[-0.3145,-0.0544,253,255,255,0],[-0.2782,-0.0544,255,255,255,0],[-0.2419,-0.0544,255,255,255,0],[-0.2056,-0.0544,255,255,255,0],[-0.0605,-0.0544,254,254,254,0],[-0.0242,-0.0544,255,255,255,0],[0.0121,-0.0544,255,255,255,0],[0.0484,-0.0544,255,255,255,0],[0.0847,-0.0544,255,255,255,0],[0.121,-0.0544,255,255,255,0],[0.1573,-0.0544,255,255,255,0],[0.1935,-0.0544,255,255,255,0],[0.375,-0.0544,253,255,254,0],[0.4113,-0.0544,255,255,255,0],[0.4476,-0.0544,255,255,255,0],[-0.4597,-0.0181,255,255,255,0],[-0.4234,-0.0181,255,255,255,0],[-0.3871,-0.0181,255,255,255,0],[-0.3508,-0.0181,255,255,255,0],[-0.1694,-0.0181,254,254,252,0],[-0.1331,-0.0181,222,222,222,0],[-0.0968,-0.0181,255,255,255,0],[-0.0605,-0.0181,255,255,255,0],[-0.0242,-0.0181,254,254,254,0],[0.0121,-0.0181,255,255,255,0],[0.0847,-0.0181,254,254,254,0],[0.121,-0.0181,255,255,255,0],[0.1573,-0.0181,255,255,255,0],[0.1935,-0.0181,255,253,255,0],[0.3024,-0.0181,255,239,240,0],[0.3387,-0.0181,255,255,253,0],[0.375,-0.0181,255,255,255,0],[0.4113,-0.0181,255,255,255,0],[0.4476,-0.0181,255,255,255,0],[-0.4597,0.0181,255,255,255,0],[-0.4234,0.0181,255,255,255,0],[-0.3871,0.0181,255,255,255,0],[-0.3508,0.0181,255,255,251,0],[-0.1331,0.0181,255,255,254,0],[-0.0968,0.0181,255,255,255,0],[-0.0605,0.0181,255,255,255,0],[-0.0242,0.0181,255,255,255,0],[0.121,0.0181,255,255,255,0],[0.1573,0.0181,255,255,255,0],[0.1935,0.0181,255,255,255,0],[0.2298,0.0181,255,255,254,0],[0.2661,0.0181,255,255,255,0],[0.3024,0.0181,255,255,255,0],[0.3387,0.0181,255,255,253,0],[0.375,0.0181,255,255,255,0],[0.4113,0.0181,255,255,255,0],[0.4476,0.0181,255,255,255,0],[-0.4597,0.0544,254,254,254,0],[-0.4234,0.0544,255,255,255,0],[-0.3871,0.0544,255,255,255,0],[-0.3508,0.0544,252,255,251,0],[-0.1331,0.0544,255,255,255,0],[-0.0968,0.0544,255,255,255,0],[-0.0605,0.0544,255,255,255,0],[-0.0242,0.0544,255,255,255,0],[0.0847,0.0544,165,165,165,0],[0.121,0.0544,255,255,255,0],[0.1573,0.0544,255,255,255,0],[0.1935,0.0544,255,255,255,0],[0.2298,0.0544,255,255,255,0],[0.2661,0.0544,255,255,255,0],[0.3024,0.0544,255,255,255,0],[0.3387,0.0544,255,255,255,0],[0.375,0.0544,255,255,255,0],[0.4113,0.0544,255,255,255,0],[0.4476,0.0544,255,255,255,0],[-0.4234,0.0907,255,255,255,0],[-0.3871,0.0907,255,255,255,0],[-0.3508,0.0907,255,255,255,0],[-0.3145,0.0907,255,255,254,0],[-0.2056,0.0907,255,252,249,0],[-0.1694,0.0907,255,255,254,0],[-0.1331,0.0907,255,255,255,0],[-0.0968,0.0907,255,255,255,0],[-0.0605,0.0907,255,255,255,0],[-0.0242,0.0907,255,255,255,0],[0.0121,0.0907,255,255,255,0],[0.0847,0.0907,255,255,255,0],[0.121,0.0907,255,255,255,0],[0.1573,0.0907,255,255,255,0],[0.1935,0.0907,255,255,255,0],[0.2298,0.0907,255,255,255,0],[0.2661,0.0907,255,255,255,0],[0.3024,0.0907,255,255,255,0],[0.3387,0.0907,255,255,255,0],[0.375,0.0907,255,255,255,0],[0.4113,0.0907,255,255,255,0],[0.4476,0.0907,250,250,250,0],[0.4839,0.0907,255,255,255,0],[-0.4234,0.127,254,254,254,0],[-0.3871,0.127,255,255,255,0],[-0.3508,0.127,255,255,255,0],[-0.3145,0.127,255,255,255,0],[-0.2782,0.127,255,255,255,0],[-0.2419,0.127,255,255,255,0],[-0.2056,0.127,255,255,255,0],[-0.1694,0.127,255,255,255,0],[-0.1331,0.127,255,255,255,0],[-0.0968,0.127,255,255,255,0],[-0.0605,0.127,255,255,255,0],[-0.0242,0.127,255,255,255,0],[0.0121,0.127,255,255,255,0],[0.0847,0.127,255,255,255,0],[0.121,0.127,255,255,255,0],[0.1573,0.127,255,255,255,0],[0.1935,0.127,255,255,255,0],[0.2298,0.127,255,255,255,0],[0.2661,0.127,255,255,255,0],[0.3024,0.127,255,255,255,0],[0.3387,0.127,255,255,255,0],[0.375,0.127,255,255,255,0],[0.4113,0.127,255,255,255,0],[-0.3871,0.1633,255,255,255,0],[-0.3508,0.1633,255,255,255,0],[-0.3145,0.1633,255,255,255,0],[-0.2782,0.1633,255,255,255,0],[-0.2419,0.1633,255,255,255,0],[-0.2056,0.1633,255,255,255,0],[-0.1694,0.1633,255,255,255,0],[-0.1331,0.1633,255,255,255,0],[-0.0968,0.1633,255,255,255,0],[-0.0605,0.1633,255,255,255,0],[-0.0242,0.1633,255,255,255,0],[0.0121,0.1633,255,255,255,0],[0.0484,0.1633,255,255,255,0],[0.0847,0.1633,255,255,255,0],[0.121,0.1633,255,255,255,0],[0.1573,0.1633,255,255,255,0],[0.1935,0.1633,255,255,255,0],[0.2298,0.1633,255,255,255,0],[0.2661,0.1633,255,255,255,0],[0.3024,0.1633,255,255,255,0],[0.3387,0.1633,255,255,255,0],[0.375,0.1633,255,255,255,0],[0.4113,0.1633,255,255,255,0],[0.4476,0.1633,212,212,212,0],[-0.3508,0.1996,255,255,255,0],[-0.3145,0.1996,255,255,255,0],[-0.2782,0.1996,255,255,255,0],[-0.2419,0.1996,255,255,255,0],[-0.2056,0.1996,255,255,255,0],[-0.1694,0.1996,255,255,255,0],[-0.1331,0.1996,255,255,255,0],[-0.0968,0.1996,255,255,255,0],[-0.0605,0.1996,255,255,255,0],[-0.0242,0.1996,255,255,255,0],[0.0121,0.1996,255,255,255,0],[0.0484,0.1996,255,255,255,0],[0.0847,0.1996,255,255,255,0],[0.121,0.1996,255,255,255,0],[0.1573,0.1996,255,255,255,0],[0.1935,0.1996,255,255,255,0],[0.2298,0.1996,255,255,255,0],[0.2661,0.1996,255,255,255,0],[0.3024,0.1996,255,255,255,0],[0.3387,0.1996,255,255,255,0],[0.375,0.1996,255,255,255,0],[0.4113,0.1996,255,255,255,0],[0.4476,0.1996,255,255,255,0],[-0.3145,0.2359,255,255,255,0],[-0.2782,0.2359,255,255,255,0],[-0.2419,0.2359,255,255,255,0],[-0.2056,0.2359,255,255,255,0],[-0.1694,0.2359,255,255,255,0],[-0.1331,0.2359,255,255,255,0],[-0.0968,0.2359,255,255,255,0],[-0.0605,0.2359,255,255,255,0],[-0.0242,0.2359,255,255,255,0],[0.0121,0.2359,255,255,255,0],[0.0484,0.2359,255,255,255,0],[0.0847,0.2359,255,255,255,0],[0.121,0.2359,255,255,255,0],[0.1573,0.2359,255,255,255,0],[0.1935,0.2359,255,255,255,0],[0.2298,0.2359,255,255,255,0],[0.2661,0.2359,255,255,255,0],[0.3024,0.2359,255,255,255,0],[0.3387,0.2359,255,255,255,0],[0.375,0.2359,255,255,255,0],[-0.3508,0.2722,255,255,255,0],[-0.3145,0.2722,215,215,215,0],[-0.2782,0.2722,255,255,255,0],[-0.2419,0.2722,255,255,255,0],[-0.2056,0.2722,255,255,255,0],[-0.1694,0.2722,255,255,255,0],[-0.1331,0.2722,255,255,255,0],[-0.0968,0.2722,255,255,255,0],[-0.0605,0.2722,255,255,255,0],[-0.0242,0.2722,255,255,255,0],[0.0121,0.2722,255,255,255,0],[0.0484,0.2722,255,255,255,0],[0.0847,0.2722,255,255,255,0],[0.121,0.2722,255,255,255,0],[0.1573,0.2722,255,255,255,0],[0.1935,0.2722,255,255,255,0],[0.2298,0.2722,255,255,255,0],[0.2661,0.2722,255,255,255,0],[0.3024,0.2722,255,255,255,0],[0.3387,0.2722,255,255,255,0],[0.375,0.2722,255,255,255,0],[-0.2782,0.3085,254,254,254,0],[-0.2419,0.3085,255,255,255,0],[-0.2056,0.3085,255,255,255,0],[-0.1694,0.3085,255,255,255,0],[-0.1331,0.3085,255,255,255,0],[-0.0968,0.3085,255,255,255,0],[-0.0605,0.3085,255,255,255,0],[-0.0242,0.3085,255,255,255,0],[0.0121,0.3085,255,255,255,0],[0.0484,0.3085,255,255,255,0],[0.0847,0.3085,255,255,255,0],[0.121,0.3085,255,255,255,0],[0.1573,0.3085,255,255,255,0],[0.1935,0.3085,255,255,255,0],[0.2298,0.3085,255,255,255,0],[0.2661,0.3085,255,255,255,0],[0.3024,0.3085,255,255,255,0],[0.3387,0.3085,255,255,255,0],[0.375,0.3085,255,255,255,0],[-0.2782,0.3448,221,221,221,0],[-0.2419,0.3448,255,255,255,0],[-0.2056,0.3448,255,255,255,0],[-0.1694,0.3448,255,255,255,0],[-0.1331,0.3448,255,255,255,0],[-0.0968,0.3448,255,255,255,0],[-0.0605,0.3448,255,255,255,0],[-0.0242,0.3448,255,255,255,0],[0.0121,0.3448,255,255,255,0],[0.0484,0.3448,255,255,255,0],[0.0847,0.3448,255,255,255,0],[0.121,0.3448,255,255,255,0],[0.1573,0.3448,255,255,255,0],[0.1935,0.3448,255,255,255,0],[0.2298,0.3448,255,255,255,0],[0.2661,0.3448,255,255,255,0],[0.3024,0.3448,255,255,255,0],[0.3387,0.3448,255,255,255,0],[0.375,0.3448,231,231,231,0],[-0.2419,0.381,255,255,255,0],[-0.2056,0.381,255,255,255,0],[-0.1694,0.381,255,255,255,0],[-0.1331,0.381,255,255,255,0],[-0.0968,0.381,255,255,255,0],[-0.0605,0.381,255,255,255,0],[-0.0242,0.381,255,255,255,0],[0.0121,0.381,255,255,255,0],[0.0484,0.381,255,255,255,0],[0.0847,0.381,255,255,255,0],[0.121,0.381,255,255,255,0],[0.1573,0.381,255,255,255,0],[0.1935,0.381,255,255,255,0],[0.2298,0.381,255,255,255,0],[0.2661,0.381,255,255,255,0],[0.3024,0.381,255,255,255,0],[0.3387,0.381,255,255,255,0],[-0.2419,0.4173,254,254,254,0],[-0.2056,0.4173,255,255,255,0],[-0.1694,0.4173,255,255,255,0],[-0.1331,0.4173,255,255,255,0],[-0.0968,0.4173,255,255,255,0],[-0.0605,0.4173,255,255,255,0],[-0.0242,0.4173,255,255,255,0],[0.0121,0.4173,255,255,255,0],[0.0484,0.4173,255,255,255,0],[0.0847,0.4173,255,255,255,0],[0.121,0.4173,255,255,255,0],[0.1573,0.4173,255,255,255,0],[0.1935,0.4173,255,255,255,0],[0.2298,0.4173,255,255,255,0],[0.2661,0.4173,255,255,255,0],[0.3024,0.4173,255,255,255,0],[0.3387,0.4173,240,240,240,0],[-0.2056,0.4536,255,255,255,0],[-0.1694,0.4536,255,255,255,0],[-0.1331,0.4536,255,255,255,0],[-0.0968,0.4536,255,255,255,0],[-0.0605,0.4536,255,255,255,0],[-0.0242,0.4536,255,255,255,0],[0.0121,0.4536,255,255,255,0],[0.0484,0.4536,255,255,255,0],[0.0847,0.4536,255,255,255,0],[0.121,0.4536,255,255,255,0],[0.1573,0.4536,255,255,255,0],[0.1935,0.4536,255,255,255,0],[0.2298,0.4536,255,255,255,0],[0.2661,0.4536,255,255,255,0],[0.3024,0.4536,199,199,199,0],[-0.2419,0.4899,255,255,255,0],[-0.2056,0.4899,255,255,255,0],[-0.1694,0.4899,255,255,255,0],[-0.1331,0.4899,255,255,255,0],[-0.0968,0.4899,255,255,255,0],[-0.0605,0.4899,255,255,255,0],[-0.0242,0.4899,255,255,255,0],[0.0121,0.4899,255,255,255,0],[0.0484,0.4899,255,255,255,0],[0.0847,0.4899,255,255,255,0],[0.121,0.4899,255,255,255,0],[0.1573,0.4899,255,255,255,0],[0.1935,0.4899,254,254,254,0],[0.2298,0.4899,255,255,255,0],[0.2661,0.4899,254,254,254,0],[-0.2419,0.5262,255,255,255,0],[-0.0605,0.5262,158,158,158,0],[-0.0242,0.5262,255,255,255,0],[0.0121,0.5262,255,255,255,0],[0.0484,0.5262,228,228,228,0],[0.0847,0.5262,118,118,118,0],[0.2298,0.5262,255,255,255,0],[0.2661,0.5262,233,233,233,0],[0.2298,-0.5746,123,148,162,1],[-0.2298,-0.5504,128,161,184,1],[-0.2056,-0.5504,103,141,160,1],[0.1815,-0.5504,135,158,180,1],[0.2298,-0.5504,120,166,187,1],[0.254,-0.5504,126,157,178,1],[-0.254,-0.5262,118,167,187,1],[-0.2298,-0.5262,118,167,187,1],[-0.2056,-0.5262,120,166,189,1],[-0.1815,-0.5262,125,166,196,1],[0.1573,-0.5262,124,167,193,1],[0.1815,-0.5262,120,166,191,1],[0.2056,-0.5262,120,166,189,1],[0.2298,-0.5262,120,166,189,1],[0.254,-0.5262,121,166,187,1],[-0.2782,-0.502,117,166,186,1],[-0.254,-0.502,118,167,187,1],[-0.2298,-0.502,120,166,189,1],[-0.2056,-0.502,120,166,189,1],[-0.1815,-0.502,120,166,189,1],[-0.1573,-0.502,118,167,187,1],[0.1089,-0.502,109,141,155,1],[0.1331,-0.502,118,167,191,1],[0.1573,-0.502,119,168,192,1],[0.1815,-0.502,121,167,192,1],[0.2056,-0.502,121,165,189,1],[0.2298,-0.502,118,167,189,1],[0.254,-0.502,120,167,185,1],[0.2782,-0.502,126,164,183,1],[-0.2782,-0.4778,120,166,189,1],[-0.254,-0.4778,118,167,187,1],[-0.2298,-0.4778,121,165,191,1],[-0.2056,-0.4778,121,165,191,1],[-0.1815,-0.4778,118,167,187,1],[-0.1573,-0.4778,118,167,187,1],[-0.1331,-0.4778,123,165,185,1],[0.0847,-0.4778,136,169,192,1],[0.1089,-0.4778,121,167,190,1],[0.1331,-0.4778,123,167,188,1],[0.1573,-0.4778,123,167,188,1],[0.1815,-0.4778,123,167,188,1],[0.2056,-0.4778,121,165,189,1],[0.2298,-0.4778,118,167,189,1],[0.254,-0.4778,118,167,187,1],[0.2782,-0.4778,118,168,185,1],[-0.2782,-0.4536,120,166,189,1],[-0.254,-0.4536,120,166,189,1],[-0.2298,-0.4536,120,166,189,1],[-0.2056,-0.4536,120,166,189,1],[-0.1815,-0.4536,120,166,189,1],[-0.1573,-0.4536,120,166,189,1],[-0.1331,-0.4536,120,166,189,1],[-0.1089,-0.4536,118,167,189,1],[-0.0605,-0.4536,128,149,165,1],[-0.0363,-0.4536,120,165,184,1],[-0.0121,-0.4536,121,166,187,1],[0.0121,-0.4536,120,164,190,1],[0.0363,-0.4536,121,166,187,1],[0.0847,-0.4536,120,164,188,1],[0.1089,-0.4536,123,166,190,1],[0.1331,-0.4536,120,166,189,1],[0.1573,-0.4536,120,166,189,1],[0.1815,-0.4536,120,166,189,1],[0.2056,-0.4536,120,166,189,1],[0.2298,-0.4536,120,166,189,1],[0.254,-0.4536,120,166,187,1],[0.2782,-0.4536,120,166,187,1],[-0.3024,-0.4294,120,174,192,1],[-0.2782,-0.4294,121,167,190,1],[-0.254,-0.4294,120,166,189,1],[-0.2298,-0.4294,120,166,189,1],[-0.2056,-0.4294,120,166,189,1],[-0.1815,-0.4294,120,166,189,1],[-0.1573,-0.4294,120,166,189,1],[-0.1331,-0.4294,120,166,189,1],[-0.1089,-0.4294,120,166,189,1],[-0.0847,-0.4294,119,165,188,1],[-0.0605,-0.4294,119,165,188,1],[-0.0363,-0.4294,120,166,189,1],[-0.0121,-0.4294,120,166,189,1],[0.0121,-0.4294,120,166,189,1],[0.0363,-0.4294,121,167,190,1],[0.0605,-0.4294,121,165,189,1],[0.0847,-0.4294,120,166,189,1],[0.1089,-0.4294,119,168,190,1],[0.1331,-0.4294,118,167,189,1],[0.1573,-0.4294,120,166,189,1],[0.1815,-0.4294,120,166,189,1],[0.2056,-0.4294,120,166,189,1],[0.2298,-0.4294,120,166,189,1],[0.254,-0.4294,120,166,187,1],[0.2782,-0.4294,120,166,187,1],[0.3024,-0.4294,63,87,104,1],[-0.3024,-0.4052,120,166,187,1],[-0.2782,-0.4052,119,168,190,1],[-0.254,-0.4052,120,166,189,1],[-0.2298,-0.4052,120,166,189,1],[-0.2056,-0.4052,120,166,189,1],[-0.1815,-0.4052,120,166,189,1],[-0.1573,-0.4052,120,166,189,1],[-0.1331,-0.4052,120,166,189,1],[-0.1089,-0.4052,120,166,189,1],[-0.0847,-0.4052,120,166,189,1],[-0.0605,-0.4052,120,166,189,1],[-0.0363,-0.4052,120,166,189,1],[-0.0121,-0.4052,120,167,185,1],[0.0121,-0.4052,120,167,183,1],[0.0363,-0.4052,121,167,190,1],[0.0605,-0.4052,121,167,190,1],[0.0847,-0.4052,119,168,190,1],[0.1089,-0.4052,121,167,190,1],[0.1331,-0.4052,120,166,189,1],[0.1573,-0.4052,120,166,189,1],[0.1815,-0.4052,120,166,189,1],[0.2056,-0.4052,120,166,189,1],[0.2298,-0.4052,120,166,189,1],[0.254,-0.4052,120,166,189,1],[0.2782,-0.4052,118,167,189,1],[0.3024,-0.4052,117,152,175,1],[-0.3024,-0.381,116,170,190,1],[-0.2782,-0.381,119,168,190,1],[-0.254,-0.381,120,166,189,1],[-0.2298,-0.381,120,166,189,1],[-0.2056,-0.381,120,166,189,1],[-0.1815,-0.381,120,166,189,1],[-0.1573,-0.381,120,166,189,1],[-0.1331,-0.381,120,166,189,1],[-0.1089,-0.381,120,166,189,1],[-0.0847,-0.381,120,166,189,1],[-0.0605,-0.381,120,166,189,1],[-0.0363,-0.381,120,166,189,1],[-0.0121,-0.381,126,164,183,1],[0.0363,-0.381,124,171,194,1],[0.0605,-0.381,119,168,190,1],[0.0847,-0.381,119,168,190,1],[0.1089,-0.381,123,166,190,1],[0.1331,-0.381,120,166,189,1],[0.1573,-0.381,120,166,189,1],[0.1815,-0.381,120,166,189,1],[0.2056,-0.381,120,166,189,1],[0.2298,-0.381,120,166,189,1],[0.254,-0.381,121,165,189,1],[0.2782,-0.381,117,168,189,1],[0.3024,-0.381,126,165,190,1],[-0.3266,-0.3569,127,160,181,1],[-0.3024,-0.3569,121,165,191,1],[-0.2782,-0.3569,119,168,190,1],[-0.254,-0.3569,120,166,189,1],[-0.2298,-0.3569,120,166,189,1],[-0.2056,-0.3569,120,166,189,1],[-0.1815,-0.3569,120,166,189,1],[-0.1573,-0.3569,120,166,189,1],[-0.1331,-0.3569,120,166,189,1],[-0.1089,-0.3569,120,166,189,1],[-0.0847,-0.3569,120,166,189,1],[-0.0605,-0.3569,120,166,189,1],[-0.0363,-0.3569,107,152,169,1],[0.0605,-0.3569,121,168,188,1],[0.0847,-0.3569,119,168,190,1],[0.1089,-0.3569,123,166,190,1],[0.1331,-0.3569,120,166,189,1],[0.1573,-0.3569,120,166,189,1],[0.1815,-0.3569,120,166,189,1],[0.2056,-0.3569,120,166,189,1],[0.2298,-0.3569,120,166,189,1],[0.254,-0.3569,116,172,191,1],[-0.3266,-0.3327,120,167,185,1],[-0.3024,-0.3327,120,166,189,1],[-0.2782,-0.3327,121,168,188,1],[-0.254,-0.3327,120,166,189,1],[-0.2298,-0.3327,120,166,189,1],[-0.2056,-0.3327,120,166,189,1],[-0.1815,-0.3327,120,166,189,1],[-0.1573,-0.3327,120,166,189,1],[-0.1331,-0.3327,120,166,189,1],[-0.1089,-0.3327,118,167,189,1],[-0.0847,-0.3327,118,167,187,1],[-0.0605,-0.3327,91,125,142,1],[0.1089,-0.3327,91,109,123,1],[0.1331,-0.3327,125,167,189,1],[0.1573,-0.3327,123,164,189,1],[0.1815,-0.3327,121,165,189,1],[0.2056,-0.3327,120,166,189,1],[-0.375,-0.3085,113,133,149,1],[-0.3508,-0.3085,125,163,193,1],[-0.3266,-0.3085,118,167,187,1],[-0.3024,-0.3085,120,166,189,1],[-0.2782,-0.3085,121,167,192,1],[-0.254,-0.3085,120,166,189,1],[-0.2298,-0.3085,120,166,189,1],[-0.2056,-0.3085,123,165,187,1],[-0.1815,-0.3085,118,167,187,1],[-0.1573,-0.3085,118,167,187,1],[-0.1331,-0.3085,124,172,201,1],[-0.1089,-0.3085,129,158,176,1],[-0.3266,-0.2843,121,168,188,1],[-0.3024,-0.2843,121,167,190,1],[-0.2782,-0.2843,121,167,192,1],[-0.254,-0.2843,120,166,191,1],[-0.2298,-0.2843,120,166,189,1],[-0.2056,-0.2843,121,166,185,1],[-0.1815,-0.2843,109,134,148,1],[0.3024,-0.1512,249,198,206,1],[0.3145,-0.1512,255,192,207,1],[0.3266,-0.1512,245,198,207,1],[0.2782,-0.1391,239,198,203,1],[0.2903,-0.1391,253,195,203,1],[0.3024,-0.1391,254,196,204,1],[0.3145,-0.1391,254,196,204,1],[0.3266,-0.1391,255,195,206,1],[0.3387,-0.1391,253,196,208,1],[0.3508,-0.1391,251,211,220,1],[0.2661,-0.127,247,198,201,1],[0.2782,-0.127,255,194,201,1],[0.2903,-0.127,253,195,203,1],[0.3024,-0.127,251,192,201,1],[0.3145,-0.127,247,194,203,1],[0.3266,-0.127,255,193,205,1],[0.3387,-0.127,115,92,93,1],[0.3508,-0.127,237,189,201,1],[0.254,-0.1149,247,198,201,1],[0.2661,-0.1149,244,192,202,1],[0.2782,-0.1149,244,189,203,1],[0.2903,-0.1149,249,193,201,1],[0.3024,-0.1149,212,170,175,1],[0.3266,-0.1149,255,202,210,1],[0.2298,-0.1028,244,196,208,1],[0.2419,-0.1028,245,196,204,1],[0.254,-0.1028,255,192,203,1],[0.2661,-0.1028,176,141,151,1],[0.2903,-0.1028,249,193,203,1],[0.3266,-0.1028,249,193,201,1],[0.2177,-0.0907,248,197,205,1],[0.2298,-0.0907,120,89,97,1],[0.254,-0.0907,249,195,202,1],[0.2903,-0.0907,251,202,212,1],[0.3266,-0.0907,247,191,198,1],[0.2056,-0.0786,255,204,218,1],[0.2177,-0.0786,255,190,205,1],[0.254,-0.0786,251,198,200,1],[0.2903,-0.0786,246,199,208,1],[0.3266,-0.0786,251,196,201,1],[0.3387,-0.0786,213,174,178,1],[0.3508,-0.0786,248,191,206,1],[0.2056,-0.0665,252,193,204,1],[0.2177,-0.0665,254,196,204,1],[0.2419,-0.0665,117,88,89,1],[0.254,-0.0665,255,200,204,1],[0.2903,-0.0665,250,194,206,1],[0.3266,-0.0665,249,193,201,1],[0.3387,-0.0665,253,194,205,1],[0.3508,-0.0665,240,200,207,1],[0.2056,-0.0544,255,194,203,1],[0.2177,-0.0544,248,192,199,1],[0.2419,-0.0544,185,146,150,1],[0.254,-0.0544,255,196,201,1],[0.2903,-0.0544,247,196,204,1],[0.3024,-0.0544,229,186,189,1],[0.3145,-0.0544,240,187,194,1],[0.3266,-0.0544,248,190,200,1],[0.3387,-0.0544,255,193,205,1],[-0.254,-0.0423,253,218,225,1],[0.2056,-0.0423,255,203,212,1],[0.2177,-0.0423,253,196,206,1],[0.2419,-0.0423,227,185,190,1],[0.254,-0.0423,255,195,200,1],[0.2661,-0.0423,208,160,165,1],[0.2782,-0.0423,224,183,186,1],[0.2903,-0.0423,247,194,201,1],[0.3024,-0.0423,249,195,204,1],[0.3145,-0.0423,255,194,205,1],[0.3266,-0.0423,251,197,206,1],[-0.2782,-0.0302,250,196,203,1],[-0.2661,-0.0302,250,195,200,1],[-0.254,-0.0302,249,196,200,1],[-0.2419,-0.0302,249,196,200,1],[-0.2298,-0.0302,255,192,202,1],[-0.2177,-0.0302,246,199,208,1],[0.2177,-0.0302,251,199,209,1],[0.2419,-0.0302,246,194,203,1],[0.254,-0.0302,255,194,204,1],[0.2661,-0.0302,255,193,202,1],[0.2782,-0.0302,255,194,202,1],[0.2903,-0.0302,253,197,204,1],[0.3024,-0.0302,249,193,203,1],[0.3145,-0.0302,247,193,205,1],[-0.3024,-0.0181,177,147,150,1],[-0.2903,-0.0181,255,204,208,1],[-0.2782,-0.0181,252,194,200,1],[-0.2661,-0.0181,255,200,206,1],[-0.254,-0.0181,247,189,195,1],[-0.2419,-0.0181,255,192,202,1],[-0.2298,-0.0181,255,197,210,1],[-0.2177,-0.0181,253,196,208,1],[-0.2056,-0.0181,255,191,207,1],[-0.1935,-0.0181,249,195,202,1],[-0.1815,-0.0181,251,221,224,1],[0.2298,-0.0181,228,193,198,1],[0.2419,-0.0181,248,191,204,1],[0.254,-0.0181,252,193,204,1],[0.2661,-0.0181,254,195,206,1],[0.2782,-0.0181,254,197,207,1],[0.2903,-0.0181,243,199,207,1],[-0.3266,-0.006,244,203,215,1],[-0.2903,-0.006,231,184,191,1],[-0.2782,-0.006,251,190,199,1],[-0.2419,-0.006,255,194,206,1],[-0.2298,-0.006,231,184,193,1],[-0.2177,-0.006,243,199,207,1],[-0.2056,-0.006,255,193,205,1],[-0.1935,-0.006,249,195,204,1],[-0.1815,-0.006,252,193,204,1],[-0.3266,0.006,228,180,192,1],[-0.2903,0.006,248,202,208,1],[-0.2782,0.006,142,117,117,1],[-0.2419,0.006,254,195,206,1],[-0.2056,0.006,177,138,142,1],[-0.1815,0.006,247,196,204,1],[-0.1694,0.006,251,192,205,1],[-0.3024,0.0181,239,197,207,1],[-0.2903,0.0181,254,202,213,1],[-0.254,0.0181,252,203,211,1],[-0.2419,0.0181,242,193,200,1],[-0.2177,0.0181,130,95,102,1],[-0.1815,0.0181,255,194,203,1],[-0.1694,0.0181,254,195,206,1],[-0.3387,0.0302,178,145,152,1],[-0.3145,0.0302,126,95,99,1],[-0.3024,0.0302,255,193,208,1],[-0.2903,0.0302,123,93,96,1],[-0.2661,0.0302,130,100,101,1],[-0.254,0.0302,254,188,202,1],[-0.2419,0.0302,152,117,120,1],[-0.2177,0.0302,238,191,200,1],[-0.1815,0.0302,255,196,207,1],[-0.1694,0.0302,255,197,207,1],[-0.3266,0.0423,229,185,193,1],[-0.3145,0.0423,251,195,205,1],[-0.3024,0.0423,255,201,212,1],[-0.2661,0.0423,249,193,203,1],[-0.254,0.0423,255,187,202,1],[-0.2177,0.0423,251,195,205,1],[-0.1815,0.0423,255,195,206,1],[-0.1694,0.0423,252,198,209,1],[-0.3266,0.0544,253,192,206,1],[-0.3145,0.0544,255,193,203,1],[-0.3024,0.0544,255,194,201,1],[-0.2903,0.0544,250,195,200,1],[-0.2782,0.0544,254,198,205,1],[-0.2661,0.0544,253,197,204,1],[-0.254,0.0544,253,197,204,1],[-0.2419,0.0544,253,197,204,1],[-0.2298,0.0544,255,192,202,1],[-0.2177,0.0544,252,192,199,1],[-0.2056,0.0544,134,102,104,1],[-0.1935,0.0544,247,190,204,1],[-0.1815,0.0544,255,195,209,1],[0.0363,0.0544,244,196,208,1],[0.0484,0.0544,240,185,202,1],[0.0605,0.0544,243,193,208,1],[-0.3145,0.0665,253,197,204,1],[-0.3024,0.0665,255,194,202,1],[-0.2903,0.0665,251,196,201,1],[-0.2782,0.0665,251,196,203,1],[-0.2661,0.0665,253,197,204,1],[-0.254,0.0665,253,197,204,1],[-0.2419,0.0665,251,196,203,1],[-0.2298,0.0665,255,192,201,1],[-0.2177,0.0665,255,194,204,1],[-0.2056,0.0665,255,194,204,1],[-0.1935,0.0665,255,195,207,1],[0.0484,0.0665,255,208,222,1],[-0.3024,0.0786,255,195,204,1],[-0.2903,0.0786,255,197,205,1],[-0.2782,0.0786,254,197,200,1],[-0.2661,0.0786,253,196,199,1],[-0.254,0.0786,254,197,200,1],[-0.2419,0.0786,254,197,198,1],[-0.2298,0.0786,253,194,205,1],[-0.2177,0.0786,255,197,207,1],[-0.2056,0.0786,247,202,211,1],[-0.2782,0.0907,248,205,213,1],[-0.2661,0.0907,243,201,206,1],[-0.254,0.0907,243,201,206,1],[-0.2419,0.0907,243,201,208,1],[-0.3508,0.4173,123,166,190,1],[-0.3266,0.4173,126,165,188,1],[-0.3024,0.4173,85,119,138,1],[-0.3508,0.4415,119,166,184,1],[-0.3266,0.4415,121,166,185,1],[-0.3024,0.4415,121,166,187,1],[-0.2782,0.4415,121,166,187,1],[-0.3266,0.4657,122,162,185,1],[-0.3024,0.4657,123,163,184,1],[-0.2782,0.4657,125,164,185,1],[0.2782,-0.5141,19,20,29,2],[-0.2903,-0.4899,19,20,29,2],[0.0,-0.381,19,20,29,2],[0.0121,-0.381,19,20,29,2],[0.3145,-0.381,19,20,29,2],[-0.0121,-0.369,19,20,29,2],[0.0,-0.369,19,20,29,2],[0.0121,-0.369,19,20,29,2],[0.0242,-0.369,19,20,29,2],[0.3024,-0.369,19,20,29,2],[0.3145,-0.369,19,20,29,2],[-0.0242,-0.3569,19,20,29,2],[-0.0121,-0.3569,19,20,29,2],[0.0,-0.3569,19,20,29,2],[0.0121,-0.3569,19,20,29,2],[0.0242,-0.3569,19,20,29,2],[0.0363,-0.3569,19,20,29,2],[0.2903,-0.3569,19,20,29,2],[0.3024,-0.3569,19,20,29,2],[0.3145,-0.3569,19,20,29,2],[-0.0363,-0.3448,19,20,29,2],[-0.0242,-0.3448,19,20,29,2],[-0.0121,-0.3448,19,20,29,2],[0.0242,-0.3448,19,20,29,2],[0.0363,-0.3448,19,20,29,2],[0.0484,-0.3448,19,20,29,2],[0.0605,-0.3448,19,20,29,2],[0.2661,-0.3448,19,20,29,2],[0.2782,-0.3448,19,20,29,2],[0.2903,-0.3448,19,20,29,2],[-0.0484,-0.3327,19,20,29,2],[-0.0363,-0.3327,19,20,29,2],[-0.0242,-0.3327,19,20,29,2],[0.0484,-0.3327,19,20,29,2],[0.0605,-0.3327,19,20,29,2],[0.0726,-0.3327,19,20,29,2],[0.0847,-0.3327,19,20,29,2],[0.0968,-0.3327,19,20,29,2],[0.2419,-0.3327,19,20,29,2],[0.254,-0.3327,19,20,29,2],[0.2661,-0.3327,19,20,29,2],[0.2782,-0.3327,19,20,29,2],[-0.0726,-0.3206,19,20,29,2],[-0.0605,-0.3206,19,20,29,2],[-0.0484,-0.3206,19,20,29,2],[-0.0363,-0.3206,19,20,29,2],[0.0847,-0.3206,19,20,29,2],[0.0968,-0.3206,19,20,29,2],[0.1089,-0.3206,19,20,29,2],[0.121,-0.3206,19,20,29,2],[0.1331,-0.3206,19,20,29,2],[0.1452,-0.3206,19,20,29,2],[0.1573,-0.3206,19,20,29,2],[0.1694,-0.3206,19,20,29,2],[0.1815,-0.3206,19,20,29,2],[0.1935,-0.3206,19,20,29,2],[0.2056,-0.3206,19,20,29,2],[0.2177,-0.3206,19,20,29,2],[0.2298,-0.3206,19,20,29,2],[0.2419,-0.3206,19,20,29,2],[0.254,-0.3206,19,20,29,2],[-0.0968,-0.3085,19,20,29,2],[-0.0847,-0.3085,19,20,29,2],[-0.0726,-0.3085,19,20,29,2],[-0.0605,-0.3085,19,20,29,2],[0.121,-0.3085,19,20,29,2],[0.1331,-0.3085,19,20,29,2],[0.1452,-0.3085,19,20,29,2],[0.1573,-0.3085,19,20,29,2],[0.1694,-0.3085,19,20,29,2],[0.1815,-0.3085,19,20,29,2],[0.1935,-0.3085,19,20,29,2],[0.2056,-0.3085,19,20,29,2],[0.2177,-0.3085,19,20,29,2],[-0.1331,-0.2964,19,20,29,2],[-0.121,-0.2964,19,20,29,2],[-0.1089,-0.2964,19,20,29,2],[-0.0968,-0.2964,19,20,29,2],[-0.0847,-0.2964,19,20,29,2],[-0.0726,-0.2964,19,20,29,2],[-0.375,-0.2843,19,20,29,2],[-0.3629,-0.2843,19,20,29,2],[-0.3508,-0.2843,19,20,29,2],[-0.3387,-0.2843,19,20,29,2],[-0.1694,-0.2843,19,20,29,2],[-0.1573,-0.2843,19,20,29,2],[-0.1452,-0.2843,19,20,29,2],[-0.1331,-0.2843,19,20,29,2],[-0.121,-0.2843,19,20,29,2],[-0.1089,-0.2843,19,20,29,2],[-0.3629,-0.2722,19,20,29,2],[-0.3508,-0.2722,19,20,29,2],[-0.3387,-0.2722,19,20,29,2],[-0.3266,-0.2722,19,20,29,2],[-0.3145,-0.2722,19,20,29,2],[-0.3024,-0.2722,19,20,29,2],[-0.2903,-0.2722,19,20,29,2],[-0.2782,-0.2722,19,20,29,2],[-0.2661,-0.2722,19,20,29,2],[-0.254,-0.2722,19,20,29,2],[-0.2419,-0.2722,19,20,29,2],[-0.2298,-0.2722,19,20,29,2],[-0.2177,-0.2722,19,20,29,2],[-0.2056,-0.2722,19,20,29,2],[-0.1935,-0.2722,19,20,29,2],[-0.1815,-0.2722,19,20,29,2],[-0.1694,-0.2722,19,20,29,2],[-0.1573,-0.2722,19,20,29,2],[-0.1452,-0.2722,19,20,29,2],[0.4476,-0.2722,19,20,29,2],[-0.3266,-0.2601,19,20,29,2],[-0.3145,-0.2601,19,20,29,2],[-0.3024,-0.2601,19,20,29,2],[-0.2903,-0.2601,19,20,29,2],[-0.2782,-0.2601,19,20,29,2],[-0.2661,-0.2601,19,20,29,2],[-0.254,-0.2601,19,20,29,2],[-0.2419,-0.2601,19,20,29,2],[-0.2298,-0.2601,19,20,29,2],[-0.2177,-0.2601,19,20,29,2],[-0.2056,-0.2601,19,20,29,2],[-0.1935,-0.2601,19,20,29,2],[0.121,-0.248,19,20,29,2],[0.1331,-0.248,19,20,29,2],[-0.1331,-0.2238,19,20,29,2],[-0.121,-0.2238,19,20,29,2],[0.4718,-0.1875,19,20,29,2],[-0.4718,-0.1754,19,20,29,2],[-0.1331,-0.1391,19,20,29,2],[-0.121,-0.1391,19,20,29,2],[-0.1089,-0.1391,19,20,29,2],[0.1573,-0.1391,19,20,29,2],[0.1694,-0.1391,19,20,29,2],[0.1815,-0.1391,19,20,29,2],[0.1935,-0.1391,19,20,29,2],[0.2056,-0.1391,19,20,29,2],[0.2177,-0.1391,19,20,29,2],[-0.1573,-0.127,19,20,29,2],[-0.1452,-0.127,19,20,29,2],[-0.1331,-0.127,19,20,29,2],[-0.121,-0.127,19,20,29,2],[-0.1089,-0.127,19,20,29,2],[-0.0968,-0.127,19,20,29,2],[-0.0847,-0.127,19,20,29,2],[0.1452,-0.127,19,20,29,2],[0.1573,-0.127,19,20,29,2],[0.1694,-0.127,19,20,29,2],[-0.1694,-0.1149,19,20,29,2],[-0.1573,-0.1149,19,20,29,2],[-0.1452,-0.1149,19,20,29,2],[-0.0847,-0.1149,19,20,29,2],[-0.0726,-0.1149,19,20,29,2],[0.1331,-0.1149,19,20,29,2],[0.1452,-0.1149,19,20,29,2],[0.1573,-0.1149,19,20,29,2],[0.3145,-0.1149,19,20,29,2],[0.3387,-0.1149,19,20,29,2],[0.3508,-0.1149,19,20,29,2],[-0.1815,-0.1028,19,20,29,2],[-0.1694,-0.1028,19,20,29,2],[-0.1573,-0.1028,19,20,29,2],[-0.0968,-0.1028,19,20,29,2],[-0.0847,-0.1028,19,20,29,2],[-0.0726,-0.1028,19,20,29,2],[0.2782,-0.1028,19,20,29,2],[0.3024,-0.1028,19,20,29,2],[0.3145,-0.1028,19,20,29,2],[0.3387,-0.1028,19,20,29,2],[0.3508,-0.1028,19,20,29,2],[-0.1815,-0.0907,19,20,29,2],[-0.1694,-0.0907,19,20,29,2],[-0.1573,-0.0907,19,20,29,2],[-0.0968,-0.0907,19,20,29,2],[-0.0847,-0.0907,19,20,29,2],[-0.0726,-0.0907,19,20,29,2],[0.2419,-0.0907,19,20,29,2],[0.2661,-0.0907,19,20,29,2],[0.2782,-0.0907,19,20,29,2],[0.3024,-0.0907,19,20,29,2],[0.3145,-0.0907,19,20,29,2],[0.3387,-0.0907,19,20,29,2],[0.3508,-0.0907,19,20,29,2],[-0.1815,-0.0786,19,20,29,2],[-0.1694,-0.0786,19,20,29,2],[-0.1573,-0.0786,19,20,29,2],[-0.1089,-0.0786,19,20,29,2],[-0.0968,-0.0786,19,20,29,2],[-0.0847,-0.0786,19,20,29,2],[-0.0726,-0.0786,19,20,29,2],[0.2298,-0.0786,19,20,29,2],[0.2419,-0.0786,19,20,29,2],[0.2661,-0.0786,19,20,29,2],[0.2782,-0.0786,19,20,29,2],[0.3024,-0.0786,19,20,29,2],[0.3145,-0.0786,19,20,29,2],[-0.1815,-0.0665,19,20,29,2],[-0.1694,-0.0665,19,20,29,2],[-0.1573,-0.0665,19,20,29,2],[-0.1452,-0.0665,19,20,29,2],[-0.1331,-0.0665,19,20,29,2],[-0.121,-0.0665,19,20,29,2],[-0.1089,-0.0665,19,20,29,2],[-0.0968,-0.0665,19,20,29,2],[-0.0847,-0.0665,19,20,29,2],[-0.0726,-0.0665,19,20,29,2],[0.2298,-0.0665,19,20,29,2],[0.2661,-0.0665,19,20,29,2],[0.2782,-0.0665,19,20,29,2],[0.3024,-0.0665,19,20,29,2],[0.3145,-0.0665,19,20,29,2],[-0.1694,-0.0544,19,20,29,2],[-0.1573,-0.0544,19,20,29,2],[-0.1331,-0.0544,19,20,29,2],[-0.121,-0.0544,19,20,29,2],[-0.0968,-0.0544,19,20,29,2],[-0.0847,-0.0544,19,20,29,2],[-0.0726,-0.0544,19,20,29,2],[0.2298,-0.0544,19,20,29,2],[0.2661,-0.0544,19,20,29,2],[0.2782,-0.0544,19,20,29,2],[-0.1694,-0.0423,19,20,29,2],[-0.1573,-0.0423,19,20,29,2],[-0.1452,-0.0423,19,20,29,2],[-0.1089,-0.0423,19,20,29,2],[-0.0968,-0.0423,19,20,29,2],[-0.0847,-0.0423,19,20,29,2],[0.1089,-0.0423,19,20,29,2],[0.2298,-0.0423,19,20,29,2],[-0.1573,-0.0302,19,20,29,2],[-0.1452,-0.0302,19,20,29,2],[-0.1331,-0.0302,19,20,29,2],[-0.121,-0.0302,19,20,29,2],[-0.1089,-0.0302,19,20,29,2],[-0.0968,-0.0302,19,20,29,2],[0.0968,-0.0302,19,20,29,2],[0.0363,-0.0181,19,20,29,2],[0.0484,-0.0181,19,20,29,2],[0.0968,-0.0181,19,20,29,2],[0.1089,-0.0181,19,20,29,2],[-0.3145,-0.006,19,20,29,2],[-0.3024,-0.006,19,20,29,2],[-0.2661,-0.006,19,20,29,2],[-0.254,-0.006,19,20,29,2],[0.0363,-0.006,19,20,29,2],[0.0484,-0.006,19,20,29,2],[0.0968,-0.006,19,20,29,2],[0.1089,-0.006,19,20,29,2],[-0.3145,0.006,19,20,29,2],[-0.3024,0.006,19,20,29,2],[-0.2661,0.006,19,20,29,2],[-0.2298,0.006,19,20,29,2],[-0.2177,0.006,19,20,29,2],[-0.1935,0.006,19,20,29,2],[-0.0121,0.006,19,20,29,2],[0.0,0.006,19,20,29,2],[0.0363,0.006,19,20,29,2],[0.0484,0.006,19,20,29,2],[0.0605,0.006,19,20,29,2],[0.0726,0.006,19,20,29,2],[0.0847,0.006,19,20,29,2],[0.0968,0.006,19,20,29,2],[-0.3266,0.0181,19,20,29,2],[-0.3145,0.0181,19,20,29,2],[-0.2782,0.0181,19,20,29,2],[-0.2661,0.0181,19,20,29,2],[-0.2298,0.0181,19,20,29,2],[-0.2056,0.0181,19,20,29,2],[-0.1935,0.0181,19,20,29,2],[-0.0121,0.0181,19,20,29,2],[0.0,0.0181,19,20,29,2],[0.0121,0.0181,19,20,29,2],[0.0242,0.0181,19,20,29,2],[0.0363,0.0181,19,20,29,2],[0.0484,0.0181,19,20,29,2],[0.0605,0.0181,19,20,29,2],[0.0726,0.0181,19,20,29,2],[0.0847,0.0181,19,20,29,2],[0.4718,0.0181,19,20,29,2],[-0.3266,0.0302,19,20,29,2],[-0.2782,0.0302,19,20,29,2],[-0.2298,0.0302,19,20,29,2],[-0.2056,0.0302,19,20,29,2],[-0.1935,0.0302,19,20,29,2],[0.0121,0.0302,19,20,29,2],[0.0242,0.0302,19,20,29,2],[0.0363,0.0302,19,20,29,2],[0.0484,0.0302,19,20,29,2],[0.0605,0.0302,19,20,29,2],[0.0726,0.0302,19,20,29,2],[0.4718,0.0302,19,20,29,2],[0.4839,0.0302,19,20,29,2],[-0.2903,0.0423,19,20,29,2],[-0.2782,0.0423,19,20,29,2],[-0.2419,0.0423,19,20,29,2],[-0.2298,0.0423,19,20,29,2],[-0.2056,0.0423,19,20,29,2],[0.0121,0.0423,19,20,29,2],[0.0242,0.0423,19,20,29,2],[0.0484,0.0423,19,20,29,2],[0.0726,0.0423,19,20,29,2],[0.4718,0.0423,19,20,29,2],[0.4839,0.0423,19,20,29,2],[0.0121,0.0544,19,20,29,2],[0.0242,0.0544,19,20,29,2],[0.0726,0.0544,19,20,29,2],[0.4718,0.0544,19,20,29,2],[0.4839,0.0544,19,20,29,2],[0.0242,0.0665,19,20,29,2],[0.0363,0.0665,19,20,29,2],[0.0605,0.0665,19,20,29,2],[0.0726,0.0665,19,20,29,2],[0.4718,0.0665,19,20,29,2],[0.0363,0.0786,19,20,29,2],[0.0484,0.0786,19,20,29,2],[0.0605,0.0786,19,20,29,2],[0.0726,0.0786,19,20,29,2],[0.4597,0.0786,19,20,29,2],[0.4718,0.0786,19,20,29,2],[0.0484,0.0907,19,20,29,2],[0.4597,0.0907,19,20,29,2],[0.4718,0.0907,19,20,29,2],[0.4597,0.1028,19,20,29,2],[0.0484,0.1149,19,20,29,2],[0.0605,0.1149,19,20,29,2],[0.0363,0.127,19,20,29,2],[0.0484,0.127,19,20,29,2],[-0.3871,0.1875,19,20,29,2],[0.4476,0.2238,19,20,29,2],[-0.3387,0.2359,19,20,29,2],[0.3992,0.2843,19,20,29,2],[-0.3629,0.2964,19,20,29,2],[-0.3387,0.4052,19,20,29,2],[-0.2661,0.4173,19,20,29,2],[-0.2661,0.4294,19,20,29,2],[-0.375,0.4415,19,20,29,2],[-0.2661,0.4415,19,20,29,2],[-0.254,0.4415,19,20,29,2],[-0.254,0.4536,19,20,29,2],[-0.2419,0.4536,19,20,29,2],[-0.254,0.4657,19,20,29,2],[-0.2419,0.4657,19,20,29,2],[-0.1331,0.5141,19,20,29,2]],[[-0.2418,-0.6221,249,249,249,0],[0.2653,-0.6221,211,211,211,0],[0.3075,-0.6221,250,250,250,0],[-0.284,-0.5798,253,253,253,0],[-0.2418,-0.5798,255,255,255,0],[-0.1995,-0.5798,170,170,170,0],[-0.115,-0.5798,161,161,161,0],[-0.0728,-0.5798,254,254,254,0],[-0.0305,-0.5798,255,255,255,0],[0.0117,-0.5798,255,255,255,0],[0.054,-0.5798,254,254,254,0],[0.0962,-0.5798,243,243,243,0],[0.2653,-0.5798,255,255,255,0],[0.3075,-0.5798,255,255,255,0],[-0.284,-0.5376,182,182,182,0],[-0.2418,-0.5376,255,255,255,0],[-0.1995,-0.5376,241,241,241,0],[-0.1573,-0.5376,255,255,255,0],[-0.115,-0.5376,254,254,254,0],[-0.0728,-0.5376,255,255,255,0],[-0.0305,-0.5376,255,255,255,0],[0.0117,-0.5376,255,255,255,0],[0.054,-0.5376,255,255,255,0],[0.0962,-0.5376,255,255,255,0],[0.1385,-0.5376,255,255,255,0],[0.1808,-0.5376,255,255,255,0],[0.223,-0.5376,246,246,246,0],[0.2653,-0.5376,255,255,255,0],[0.3075,-0.5376,254,254,254,0],[-0.3263,-0.4953,253,253,253,0],[-0.284,-0.4953,255,255,255,0],[-0.2418,-0.4953,255,255,255,0],[-0.1995,-0.4953,255,255,255,0],[-0.1573,-0.4953,255,255,255,0],[-0.115,-0.4953,255,255,255,0],[-0.0728,-0.4953,255,255,255,0],[-0.0305,-0.4953,255,255,255,0],[0.0117,-0.4953,255,255,255,0],[0.054,-0.4953,255,255,255,0],[0.0962,-0.4953,255,255,255,0],[0.1385,-0.4953,255,255,255,0],[0.1808,-0.4953,255,255,255,0],[0.223,-0.4953,255,255,255,0],[0.2653,-0.4953,255,255,255,0],[0.3075,-0.4953,255,255,255,0],[0.3498,-0.4953,254,254,254,0],[-0.4108,-0.4531,221,221,221,0],[-0.3685,-0.4531,255,255,255,0],[-0.3263,-0.4531,255,255,255,0],[-0.284,-0.4531,255,255,255,0],[-0.2418,-0.4531,255,255,255,0],[-0.1995,-0.4531,255,255,255,0],[-0.1573,-0.4531,255,255,255,0],[-0.115,-0.4531,255,255,255,0],[-0.0728,-0.4531,255,255,255,0],[-0.0305,-0.4531,255,255,255,0],[0.0117,-0.4531,255,255,255,0],[0.054,-0.4531,255,255,255,0],[0.0962,-0.4531,255,255,255,0],[0.1385,-0.4531,255,255,255,0],[0.1808,-0.4531,255,255,255,0],[0.223,-0.4531,255,255,255,0],[0.2653,-0.4531,255,255,255,0],[0.3075,-0.4531,255,255,255,0],[0.3498,-0.4531,255,255,255,0],[0.392,-0.4531,255,255,255,0],[0.4343,-0.4531,255,255,255,0],[-0.4531,-0.4108,242,242,242,0],[-0.4108,-0.4108,255,255,255,0],[-0.3685,-0.4108,255,255,255,0],[-0.3263,-0.4108,255,255,255,0],[-0.284,-0.4108,255,255,255,0],[-0.2418,-0.4108,255,255,255,0],[-0.1995,-0.4108,255,255,255,0],[-0.1573,-0.4108,255,255,255,0],[-0.115,-0.4108,255,255,255,0],[-0.0728,-0.4108,255,255,255,0],[-0.0305,-0.4108,255,255,255,0],[0.0117,-0.4108,255,255,255,0],[0.054,-0.4108,255,255,255,0],[0.0962,-0.4108,255,255,255,0],[0.1385,-0.4108,255,255,255,0],[0.1808,-0.4108,255,255,255,0],[0.223,-0.4108,255,255,255,0],[0.2653,-0.4108,255,255,255,0],[0.3075,-0.4108,255,255,255,0],[0.3498,-0.4108,255,255,255,0],[0.392,-0.4108,255,255,255,0],[0.4343,-0.4108,255,255,255,0],[0.4765,-0.4108,252,251,252,0],[-0.4531,-0.3685,255,255,255,0],[-0.4108,-0.3685,255,255,255,0],[-0.3685,-0.3685,255,255,255,0],[-0.3263,-0.3685,255,255,255,0],[-0.284,-0.3685,255,255,255,0],[-0.2418,-0.3685,255,255,255,0],[-0.1995,-0.3685,255,255,255,0],[-0.1573,-0.3685,255,255,255,0],[-0.115,-0.3685,255,255,255,0],[-0.0728,-0.3685,255,255,255,0],[-0.0305,-0.3685,255,255,255,0],[0.0117,-0.3685,255,255,255,0],[0.054,-0.3685,255,255,255,0],[0.0962,-0.3685,255,255,255,0],[0.1385,-0.3685,255,255,255,0],[0.1808,-0.3685,255,255,255,0],[0.223,-0.3685,255,255,255,0],[0.2653,-0.3685,255,255,255,0],[0.3075,-0.3685,255,255,255,0],[0.3498,-0.3685,255,255,255,0],[0.392,-0.3685,255,255,255,0],[0.4343,-0.3685,255,255,255,0],[0.4765,-0.3685,255,255,255,0],[-0.4531,-0.3263,255,255,255,0],[-0.4108,-0.3263,255,255,255,0],[-0.3685,-0.3263,255,255,255,0],[-0.3263,-0.3263,255,255,255,0],[-0.284,-0.3263,255,255,255,0],[-0.2418,-0.3263,255,255,255,0],[-0.1995,-0.3263,255,255,255,0],[-0.1573,-0.3263,255,255,255,0],[-0.115,-0.3263,255,255,255,0],[-0.0728,-0.3263,255,255,255,0],[-0.0305,-0.3263,255,255,255,0],[0.0117,-0.3263,255,255,255,0],[0.054,-0.3263,255,255,255,0],[0.0962,-0.3263,255,255,255,0],[0.1385,-0.3263,255,255,255,0],[0.1808,-0.3263,255,255,255,0],[0.223,-0.3263,255,255,255,0],[0.2653,-0.3263,255,255,255,0],[0.3075,-0.3263,255,255,255,0],[0.3498,-0.3263,255,255,255,0],[0.392,-0.3263,255,255,255,0],[0.4343,-0.3263,255,255,255,0],[-0.4531,-0.284,255,255,255,0],[-0.4108,-0.284,255,255,255,0],[-0.3685,-0.284,255,255,255,0],[-0.3263,-0.284,255,255,255,0],[-0.284,-0.284,255,255,255,0],[-0.2418,-0.284,255,255,255,0],[-0.1995,-0.284,255,255,255,0],[-0.1573,-0.284,255,255,255,0],[-0.115,-0.284,255,255,255,0],[-0.0728,-0.284,255,255,255,0],[-0.0305,-0.284,255,255,255,0],[0.0117,-0.284,255,255,255,0],[0.054,-0.284,255,255,255,0],[0.0962,-0.284,255,255,255,0],[0.1385,-0.284,255,255,255,0],[0.1808,-0.284,255,255,255,0],[0.223,-0.284,255,255,255,0],[0.2653,-0.284,255,255,255,0],[0.3075,-0.284,255,255,255,0],[0.3498,-0.284,255,255,255,0],[0.392,-0.284,255,255,255,0],[0.4343,-0.284,255,255,255,0],[-0.4531,-0.2418,255,255,255,0],[-0.4108,-0.2418,255,255,255,0],[-0.3685,-0.2418,255,255,255,0],[-0.3263,-0.2418,255,255,255,0],[-0.284,-0.2418,255,255,255,0],[-0.2418,-0.2418,255,255,255,0],[-0.1995,-0.2418,255,255,255,0],[-0.1573,-0.2418,255,255,255,0],[-0.115,-0.2418,255,255,255,0],[-0.0728,-0.2418,255,255,255,0],[-0.0305,-0.2418,255,255,255,0],[0.0117,-0.2418,255,255,255,0],[0.054,-0.2418,255,255,255,0],[0.0962,-0.2418,255,255,255,0],[0.1385,-0.2418,255,255,255,0],[0.1808,-0.2418,255,255,255,0],[0.223,-0.2418,255,255,255,0],[0.2653,-0.2418,255,255,255,0],[0.3075,-0.2418,255,255,255,0],[0.3498,-0.2418,255,255,255,0],[0.392,-0.2418,255,255,255,0],[0.4343,-0.2418,255,255,255,0],[-0.4531,-0.1995,255,255,255,0],[-0.4108,-0.1995,255,255,255,0],[-0.3685,-0.1995,255,255,255,0],[-0.3263,-0.1995,255,255,255,0],[-0.284,-0.1995,255,255,255,0],[-0.2418,-0.1995,255,255,255,0],[-0.1573,-0.1995,175,175,175,0],[-0.115,-0.1995,252,251,252,0],[-0.0728,-0.1995,255,255,255,0],[-0.0305,-0.1995,255,255,255,0],[0.0117,-0.1995,255,255,255,0],[0.054,-0.1995,255,255,255,0],[0.0962,-0.1995,255,255,255,0],[0.1385,-0.1995,178,178,178,0],[0.2653,-0.1995,255,255,255,0],[0.3075,-0.1995,255,255,255,0],[0.3498,-0.1995,255,255,255,0],[0.392,-0.1995,255,255,255,0],[-0.4531,-0.1573,255,255,255,0],[-0.4108,-0.1573,255,255,255,0],[-0.3685,-0.1573,255,255,255,0],[-0.3263,-0.1573,255,255,255,0],[-0.284,-0.1573,255,255,255,0],[-0.2418,-0.1573,255,255,255,0],[-0.1995,-0.1573,255,255,255,0],[-0.1573,-0.1573,255,255,255,0],[-0.115,-0.1573,255,255,255,0],[-0.0728,-0.1573,255,255,255,0],[-0.0305,-0.1573,255,255,255,0],[0.0117,-0.1573,255,255,255,0],[0.054,-0.1573,255,255,255,0],[0.0962,-0.1573,255,255,255,0],[0.1385,-0.1573,255,255,255,0],[0.1808,-0.1573,255,255,255,0],[0.223,-0.1573,255,255,255,0],[0.2653,-0.1573,255,255,255,0],[0.3075,-0.1573,255,255,255,0],[0.3498,-0.1573,255,255,255,0],[0.392,-0.1573,255,255,255,0],[-0.4531,-0.115,255,255,255,0],[-0.4108,-0.115,255,255,255,0],[-0.3685,-0.115,255,255,255,0],[-0.3263,-0.115,255,255,255,0],[-0.284,-0.115,255,255,255,0],[-0.2418,-0.115,255,255,255,0],[-0.1995,-0.115,255,255,255,0],[-0.1573,-0.115,255,255,255,0],[-0.115,-0.115,255,255,255,0],[-0.0728,-0.115,255,255,255,0],[-0.0305,-0.115,255,255,255,0],[0.0117,-0.115,255,255,255,0],[0.054,-0.115,255,255,255,0],[0.0962,-0.115,255,255,255,0],[0.1385,-0.115,255,255,255,0],[0.1808,-0.115,255,255,255,0],[0.223,-0.115,255,255,255,0],[0.2653,-0.115,255,255,255,0],[0.3075,-0.115,255,255,255,0],[0.3498,-0.115,255,255,255,0],[0.392,-0.115,255,255,255,0],[-0.4531,-0.0728,254,254,254,0],[-0.4108,-0.0728,255,255,255,0],[-0.3685,-0.0728,255,255,254,0],[-0.3263,-0.0728,255,253,253,0],[-0.284,-0.0728,255,255,253,0],[-0.2418,-0.0728,255,255,255,0],[-0.1995,-0.0728,229,229,229,0],[-0.0728,-0.0728,255,255,255,0],[-0.0305,-0.0728,255,255,255,0],[0.0117,-0.0728,255,255,255,0],[0.054,-0.0728,255,255,255,0],[0.0962,-0.0728,255,255,255,0],[0.1385,-0.0728,250,250,250,0],[0.2653,-0.0728,255,255,253,0],[0.3075,-0.0728,255,253,251,0],[0.3498,-0.0728,253,255,255,0],[0.392,-0.0728,255,255,255,0],[-0.4531,-0.0305,254,254,254,0],[-0.4108,-0.0305,255,255,252,0],[-0.1995,-0.0305,255,255,255,0],[-0.1573,-0.0305,254,254,254,0],[-0.115,-0.0305,254,254,254,0],[-0.0728,-0.0305,255,255,255,0],[-0.0305,-0.0305,255,255,255,0],[0.0117,-0.0305,255,255,255,0],[0.054,-0.0305,255,255,255,0],[0.0962,-0.0305,255,255,255,0],[0.1385,-0.0305,255,255,255,0],[0.1808,-0.0305,255,255,255,0],[0.223,-0.0305,253,255,255,0],[0.4343,-0.0305,254,254,254,0],[-0.4531,0.0117,255,255,255,0],[-0.4108,0.0117,255,246,247,0],[-0.1995,0.0117,255,255,253,0],[-0.1573,0.0117,255,255,255,0],[-0.115,0.0117,255,255,255,0],[-0.0728,0.0117,255,255,255,0],[-0.0305,0.0117,255,255,255,0],[0.0117,0.0117,255,255,255,0],[0.054,0.0117,255,255,255,0],[0.0962,0.0117,255,255,255,0],[0.1385,0.0117,255,255,255,0],[0.1808,0.0117,255,255,255,0],[0.223,0.0117,255,251,251,0],[0.4343,0.0117,255,253,252,0],[-0.4531,0.054,255,255,255,0],[-0.4108,0.054,255,255,251,0],[-0.1995,0.054,255,255,253,0],[-0.1573,0.054,255,255,255,0],[-0.115,0.054,255,255,255,0],[-0.0728,0.054,255,255,255,0],[0.054,0.054,254,254,254,0],[0.1385,0.054,255,255,255,0],[0.1808,0.054,255,255,255,0],[0.223,0.054,255,253,251,0],[0.4343,0.054,253,255,254,0],[-0.4531,0.0962,255,255,255,0],[-0.4108,0.0962,255,255,255,0],[-0.3685,0.0962,255,255,255,0],[-0.3263,0.0962,255,255,255,0],[-0.284,0.0962,253,255,255,0],[-0.2418,0.0962,252,255,255,0],[-0.1995,0.0962,255,255,255,0],[-0.1573,0.0962,255,255,255,0],[-0.115,0.0962,255,255,255,0],[-0.0728,0.0962,255,255,255,0],[-0.0305,0.0962,252,251,252,0],[0.0117,0.0962,255,255,255,0],[0.0962,0.0962,255,255,255,0],[0.1385,0.0962,255,255,255,0],[0.1808,0.0962,255,255,255,0],[0.223,0.0962,255,255,255,0],[0.2653,0.0962,253,255,253,0],[0.3498,0.0962,255,247,247,0],[0.392,0.0962,253,255,255,0],[0.4343,0.0962,255,255,255,0],[0.4765,0.0962,254,254,254,0],[-0.4531,0.1385,253,253,253,0],[-0.4108,0.1385,255,255,255,0],[-0.3685,0.1385,255,255,255,0],[-0.3263,0.1385,255,255,255,0],[-0.284,0.1385,255,255,255,0],[-0.2418,0.1385,255,255,255,0],[-0.1995,0.1385,255,255,255,0],[-0.1573,0.1385,255,255,255,0],[-0.115,0.1385,255,255,255,0],[-0.0728,0.1385,255,255,255,0],[-0.0305,0.1385,255,255,255,0],[0.0962,0.1385,255,255,255,0],[0.1385,0.1385,255,255,255,0],[0.1808,0.1385,255,255,255,0],[0.223,0.1385,255,255,255,0],[0.2653,0.1385,255,255,255,0],[0.3075,0.1385,255,255,255,0],[0.3498,0.1385,255,255,255,0],[0.392,0.1385,255,255,255,0],[0.4343,0.1385,255,255,255,0],[0.4765,0.1385,255,255,255,0],[-0.4108,0.1808,255,255,255,0],[-0.3685,0.1808,255,255,255,0],[-0.3263,0.1808,255,255,255,0],[-0.284,0.1808,255,255,255,0],[-0.2418,0.1808,255,255,255,0],[-0.1995,0.1808,255,255,255,0],[-0.1573,0.1808,255,255,255,0],[-0.115,0.1808,255,255,255,0],[-0.0728,0.1808,255,255,255,0],[-0.0305,0.1808,255,255,255,0],[0.0117,0.1808,249,249,249,0],[0.054,0.1808,253,253,253,0],[0.0962,0.1808,255,255,255,0],[0.1385,0.1808,255,255,255,0],[0.1808,0.1808,255,255,255,0],[0.223,0.1808,255,255,255,0],[0.2653,0.1808,255,255,255,0],[0.3075,0.1808,255,255,255,0],[0.3498,0.1808,255,255,255,0],[0.392,0.1808,255,255,255,0],[0.4343,0.1808,255,255,255,0],[0.4765,0.1808,253,253,253,0],[-0.4531,0.223,252,251,252,0],[-0.4108,0.223,253,253,253,0],[-0.3685,0.223,255,255,255,0],[-0.3263,0.223,255,255,255,0],[-0.284,0.223,255,255,255,0],[-0.2418,0.223,255,255,255,0],[-0.1995,0.223,255,255,255,0],[-0.1573,0.223,255,255,255,0],[-0.115,0.223,255,255,255,0],[-0.0728,0.223,255,255,255,0],[-0.0305,0.223,255,255,255,0],[0.0117,0.223,255,255,255,0],[0.054,0.223,255,255,255,0],[0.0962,0.223,255,255,255,0],[0.1385,0.223,255,255,255,0],[0.1808,0.223,255,255,255,0],[0.223,0.223,255,255,255,0],[0.2653,0.223,255,255,255,0],[0.3075,0.223,255,255,255,0],[0.3498,0.223,255,255,255,0],[0.392,0.223,255,255,255,0],[0.4343,0.223,252,251,252,0],[-0.3685,0.2653,255,255,255,0],[-0.3263,0.2653,255,255,255,0],[-0.284,0.2653,255,255,255,0],[-0.2418,0.2653,255,255,255,0],[-0.1995,0.2653,255,255,255,0],[-0.1573,0.2653,255,255,255,0],[-0.115,0.2653,255,255,255,0],[-0.0728,0.2653,255,255,255,0],[-0.0305,0.2653,255,255,255,0],[0.0117,0.2653,255,255,255,0],[0.054,0.2653,255,255,255,0],[0.0962,0.2653,255,255,255,0],[0.1385,0.2653,255,255,255,0],[0.1808,0.2653,255,255,255,0],[0.223,0.2653,255,255,255,0],[0.2653,0.2653,255,255,255,0],[0.3075,0.2653,255,255,255,0],[0.3498,0.2653,255,255,255,0],[0.392,0.2653,255,255,255,0],[0.4343,0.2653,255,255,255,0],[-0.3685,0.3075,246,246,246,0],[-0.3263,0.3075,255,255,255,0],[-0.284,0.3075,255,255,255,0],[-0.2418,0.3075,255,255,255,0],[-0.1995,0.3075,255,255,255,0],[-0.1573,0.3075,255,255,255,0],[-0.115,0.3075,255,255,255,0],[-0.0728,0.3075,255,255,255,0],[-0.0305,0.3075,255,255,255,0],[0.0117,0.3075,255,255,255,0],[0.054,0.3075,255,255,255,0],[0.0962,0.3075,255,255,255,0],[0.1385,0.3075,255,255,255,0],[0.1808,0.3075,255,255,255,0],[0.223,0.3075,255,255,255,0],[0.2653,0.3075,255,255,255,0],[0.3075,0.3075,255,255,255,0],[0.3498,0.3075,255,255,255,0],[0.392,0.3075,255,255,255,0],[-0.3263,0.3498,255,255,255,0],[-0.284,0.3498,255,255,255,0],[-0.2418,0.3498,255,255,255,0],[-0.1995,0.3498,255,255,255,0],[-0.1573,0.3498,255,255,255,0],[-0.115,0.3498,255,255,255,0],[-0.0728,0.3498,255,255,255,0],[-0.0305,0.3498,255,255,255,0],[0.0117,0.3498,255,255,255,0],[0.054,0.3498,255,255,255,0],[0.0962,0.3498,255,255,255,0],[0.1385,0.3498,255,255,255,0],[0.1808,0.3498,255,255,255,0],[0.223,0.3498,255,255,255,0],[0.2653,0.3498,255,255,255,0],[0.3075,0.3498,255,255,255,0],[0.3498,0.3498,255,255,255,0],[0.392,0.3498,255,255,255,0],[-0.3263,0.392,255,255,255,0],[-0.284,0.392,255,255,255,0],[-0.2418,0.392,255,255,255,0],[-0.1995,0.392,255,255,255,0],[-0.1573,0.392,255,255,255,0],[-0.115,0.392,255,255,255,0],[-0.0728,0.392,255,255,255,0],[-0.0305,0.392,255,255,255,0],[0.0117,0.392,255,255,255,0],[0.054,0.392,255,255,255,0],[0.0962,0.392,255,255,255,0],[0.1385,0.392,255,255,255,0],[0.1808,0.392,255,255,255,0],[0.223,0.392,255,255,255,0],[0.2653,0.392,255,255,255,0],[0.3075,0.392,255,255,255,0],[0.3498,0.392,255,255,255,0],[-0.284,0.4343,255,255,255,0],[-0.2418,0.4343,255,255,255,0],[-0.1995,0.4343,255,255,255,0],[-0.1573,0.4343,255,255,255,0],[-0.115,0.4343,255,255,255,0],[-0.0728,0.4343,255,255,255,0],[-0.0305,0.4343,255,255,255,0],[0.0117,0.4343,255,255,255,0],[0.054,0.4343,255,255,255,0],[0.0962,0.4343,255,255,255,0],[0.1385,0.4343,255,255,255,0],[0.1808,0.4343,255,255,255,0],[0.223,0.4343,255,255,255,0],[0.2653,0.4343,255,255,255,0],[0.3075,0.4343,255,255,255,0],[0.3498,0.4343,248,248,248,0],[-0.2418,0.4765,255,255,255,0],[-0.1995,0.4765,255,255,255,0],[-0.1573,0.4765,255,255,255,0],[-0.115,0.4765,255,255,255,0],[-0.0728,0.4765,255,255,255,0],[-0.0305,0.4765,255,255,255,0],[0.0117,0.4765,255,255,255,0],[0.054,0.4765,255,255,255,0],[0.0962,0.4765,255,255,255,0],[0.1385,0.4765,255,255,255,0],[0.1808,0.4765,255,255,255,0],[0.223,0.4765,255,255,255,0],[0.2653,0.4765,255,255,255,0],[0.3075,0.4765,247,247,247,0],[-0.1995,0.5188,255,255,255,0],[-0.1573,0.5188,254,254,254,0],[-0.115,0.5188,255,255,255,0],[-0.0728,0.5188,255,255,255,0],[-0.0305,0.5188,255,255,255,0],[0.0117,0.5188,255,255,255,0],[0.054,0.5188,255,255,255,0],[0.0962,0.5188,255,255,255,0],[0.1385,0.5188,255,255,255,0],[0.1808,0.5188,255,255,255,0],[0.223,0.5188,254,254,254,0],[-0.115,0.561,250,250,250,0],[-0.0728,0.561,253,253,253,0],[-0.0305,0.561,255,255,255,0],[0.0117,0.561,255,255,255,0],[0.054,0.561,255,255,255,0],[0.0962,0.561,254,254,254,0],[0.1385,0.561,219,219,219,0],[-0.0305,0.6033,255,255,255,0],[0.0117,0.6033,253,253,253,0],[0.054,0.6033,125,125,125,0],[0.0962,0.6033,255,255,255,0],[0.0962,0.6455,248,248,248,0],[0.4624,-0.1854,216,207,178,1],[0.4624,-0.1573,247,238,209,1],[0.4624,-0.1291,246,237,208,1],[0.4624,-0.1009,192,183,155,1],[-0.3263,-0.0587,245,193,202,1],[-0.3122,-0.0587,254,197,207,1],[-0.2981,-0.0587,253,196,206,1],[-0.284,-0.0587,254,205,212,1],[-0.3545,-0.0446,249,198,204,1],[-0.3404,-0.0446,254,185,199,1],[-0.3263,-0.0446,252,193,204,1],[-0.3122,-0.0446,254,196,204,1],[-0.2981,-0.0446,255,193,203,1],[-0.284,-0.0446,255,192,200,1],[-0.27,-0.0446,253,193,200,1],[-0.2559,-0.0446,253,197,204,1],[-0.2418,-0.0446,244,217,217,1],[0.2793,-0.0446,255,210,220,1],[0.2934,-0.0446,251,195,205,1],[0.3075,-0.0446,255,195,204,1],[0.3216,-0.0446,255,192,203,1],[0.3357,-0.0446,253,195,203,1],[0.3498,-0.0446,253,195,203,1],[0.3638,-0.0446,245,198,207,1],[0.3779,-0.0446,254,221,226,1],[-0.3826,-0.0305,255,193,208,1],[-0.3685,-0.0305,239,195,200,1],[-0.3404,-0.0305,144,107,113,1],[-0.3263,-0.0305,253,196,208,1],[-0.3122,-0.0305,248,199,206,1],[-0.284,-0.0305,249,195,202,1],[-0.27,-0.0305,252,194,200,1],[-0.2559,-0.0305,252,194,200,1],[-0.2418,-0.0305,250,194,202,1],[0.2653,-0.0305,246,194,205,1],[0.2793,-0.0305,241,197,203,1],[0.2934,-0.0305,255,194,205,1],[0.3075,-0.0305,255,194,203,1],[0.3216,-0.0305,242,200,203,1],[0.3357,-0.0305,250,197,201,1],[0.3498,-0.0305,247,194,201,1],[0.3638,-0.0305,252,194,202,1],[0.3779,-0.0305,255,191,207,1],[-0.3967,-0.0164,247,195,206,1],[-0.3826,-0.0164,253,194,205,1],[-0.3263,-0.0164,253,196,208,1],[-0.27,-0.0164,237,191,195,1],[-0.2559,-0.0164,217,170,177,1],[-0.2418,-0.0164,248,197,205,1],[-0.2277,-0.0164,253,194,207,1],[0.2371,-0.0164,250,232,233,1],[0.2512,-0.0164,245,193,204,1],[0.2934,-0.0164,244,191,197,1],[0.3075,-0.0164,255,202,211,1],[0.3357,-0.0164,246,193,197,1],[0.3498,-0.0164,248,199,206,1],[0.3779,-0.0164,251,192,205,1],[0.392,-0.0164,249,192,205,1],[0.4061,-0.0164,117,87,93,1],[-0.3967,-0.0023,250,196,203,1],[-0.3826,-0.0023,248,202,208,1],[-0.3545,-0.0023,153,111,119,1],[-0.3404,-0.0023,255,200,214,1],[-0.3263,-0.0023,231,191,200,1],[-0.284,-0.0023,243,196,201,1],[-0.2418,-0.0023,238,189,199,1],[0.2371,-0.0023,250,196,205,1],[0.2512,-0.0023,243,194,204,1],[0.2934,-0.0023,255,192,202,1],[0.3075,-0.0023,184,141,151,1],[0.3357,-0.0023,246,190,195,1],[0.3498,-0.0023,122,87,90,1],[0.3779,-0.0023,238,196,204,1],[0.392,-0.0023,146,113,117,1],[-0.3967,0.0117,248,197,205,1],[-0.3545,0.0117,249,195,204,1],[-0.3404,0.0117,249,194,206,1],[-0.2981,0.0117,235,199,199,1],[-0.284,0.0117,212,168,172,1],[-0.2559,0.0117,128,96,100,1],[-0.2418,0.0117,200,170,175,1],[-0.2136,0.0117,149,129,131,1],[0.2371,0.0117,249,195,202,1],[0.2793,0.0117,247,201,205,1],[0.2934,0.0117,247,191,198,1],[0.3357,0.0117,255,197,203,1],[0.3779,0.0117,254,202,213,1],[0.4202,0.0117,239,199,208,1],[-0.3967,0.0258,243,199,207,1],[-0.3685,0.0258,249,195,204,1],[-0.3545,0.0258,253,192,204,1],[-0.3404,0.0258,242,198,206,1],[-0.2981,0.0258,243,195,197,1],[-0.2559,0.0258,244,195,205,1],[0.2371,0.0258,250,195,200,1],[0.2793,0.0258,255,201,210,1],[0.2934,0.0258,248,199,204,1],[0.3357,0.0258,250,190,196,1],[0.3779,0.0258,252,191,205,1],[0.4202,0.0258,245,196,208,1],[-0.3967,0.0399,238,193,199,1],[-0.3826,0.0399,252,199,205,1],[-0.3685,0.0399,250,196,203,1],[-0.3545,0.0399,255,194,205,1],[-0.3404,0.0399,251,195,205,1],[-0.3263,0.0399,226,184,189,1],[-0.3122,0.0399,248,192,202,1],[-0.2981,0.0399,254,191,199,1],[-0.284,0.0399,230,184,188,1],[-0.27,0.0399,233,189,195,1],[-0.2559,0.0399,252,193,206,1],[-0.2418,0.0399,248,189,202,1],[0.2371,0.0399,253,197,202,1],[0.2512,0.0399,250,204,206,1],[0.2653,0.0399,248,202,206,1],[0.2793,0.0399,255,204,210,1],[0.2934,0.0399,247,194,203,1],[0.3075,0.0399,196,154,162,1],[0.3216,0.0399,255,203,214,1],[0.3357,0.0399,249,192,195,1],[0.3498,0.0399,250,194,202,1],[0.3638,0.0399,242,191,199,1],[0.3779,0.0399,251,183,197,1],[0.392,0.0399,226,180,186,1],[0.4061,0.0399,241,184,197,1],[-0.3826,0.054,246,192,202,1],[-0.3685,0.054,250,196,203,1],[-0.3545,0.054,253,195,203,1],[-0.3404,0.054,255,192,205,1],[-0.3263,0.054,255,192,203,1],[-0.3122,0.054,255,192,202,1],[-0.2981,0.054,250,197,201,1],[-0.284,0.054,255,194,202,1],[-0.27,0.054,255,191,205,1],[-0.2559,0.054,255,192,205,1],[-0.2418,0.054,253,192,206,1],[0.2512,0.054,255,195,202,1],[0.2653,0.054,255,194,203,1],[0.2793,0.054,255,194,203,1],[0.2934,0.054,253,194,205,1],[0.3075,0.054,253,192,204,1],[0.3216,0.054,253,193,202,1],[0.3357,0.054,252,194,200,1],[0.3498,0.054,255,194,203,1],[0.3638,0.054,255,191,203,1],[0.3779,0.054,255,191,205,1],[0.392,0.054,255,190,205,1],[0.4061,0.054,255,197,207,1],[-0.3685,0.0681,244,195,203,1],[-0.3545,0.0681,254,196,204,1],[-0.3404,0.0681,254,198,203,1],[-0.3263,0.0681,250,197,199,1],[-0.3122,0.0681,253,196,199,1],[-0.2981,0.0681,251,198,200,1],[-0.284,0.0681,255,195,200,1],[-0.27,0.0681,255,189,201,1],[-0.2559,0.0681,245,196,204,1],[-0.2418,0.0681,253,238,236,1],[0.2512,0.0681,253,201,210,1],[0.2653,0.0681,251,195,205,1],[0.2793,0.0681,255,194,205,1],[0.2934,0.0681,253,194,205,1],[0.3075,0.0681,251,195,205,1],[0.3216,0.0681,251,196,203,1],[0.3357,0.0681,253,195,201,1],[0.3498,0.0681,253,195,201,1],[0.3638,0.0681,253,195,201,1],[0.3779,0.0681,250,190,194,1],[0.392,0.0681,242,196,197,1],[0.2793,0.0822,253,194,207,1],[0.2934,0.0822,251,195,207,1],[0.3075,0.0822,251,195,207,1],[0.3216,0.0822,251,195,207,1],[0.3357,0.0822,251,196,203,1],[0.3498,0.0822,251,195,205,1],[0.3638,0.0822,248,197,203,1],[0.3216,0.0962,255,237,239,1],[0.3357,-0.608,19,20,29,2],[-0.0305,-0.5939,19,20,29,2],[0.0399,-0.5939,19,20,29,2],[0.1385,-0.5798,19,20,29,2],[-0.1995,-0.5516,19,20,29,2],[-0.1854,-0.5516,19,20,29,2],[0.3357,-0.5516,19,20,29,2],[0.3357,-0.5376,19,20,29,2],[-0.284,-0.5235,19,20,29,2],[0.3216,-0.5235,19,20,29,2],[-0.3545,-0.4953,19,20,29,2],[-0.3967,-0.4671,19,20,29,2],[0.4484,-0.2559,19,20,29,2],[0.4624,-0.2559,19,20,29,2],[0.4765,-0.2559,19,20,29,2],[0.4484,-0.2418,19,20,29,2],[0.4624,-0.2418,19,20,29,2],[0.4484,-0.2277,19,20,29,2],[0.4624,-0.2277,19,20,29,2],[-0.1714,-0.2136,19,20,29,2],[-0.1573,-0.2136,19,20,29,2],[-0.1432,-0.2136,19,20,29,2],[-0.1291,-0.2136,19,20,29,2],[-0.115,-0.2136,19,20,29,2],[0.1385,-0.2136,19,20,29,2],[0.1526,-0.2136,19,20,29,2],[0.1667,-0.2136,19,20,29,2],[0.1808,-0.2136,19,20,29,2],[0.1948,-0.2136,19,20,29,2],[0.2089,-0.2136,19,20,29,2],[0.4484,-0.2136,19,20,29,2],[0.4624,-0.2136,19,20,29,2],[-0.1995,-0.1995,19,20,29,2],[-0.1854,-0.1995,19,20,29,2],[-0.1714,-0.1995,19,20,29,2],[0.1526,-0.1995,19,20,29,2],[0.1667,-0.1995,19,20,29,2],[0.1808,-0.1995,19,20,29,2],[0.1948,-0.1995,19,20,29,2],[0.2089,-0.1995,19,20,29,2],[0.223,-0.1995,19,20,29,2],[0.4343,-0.1995,19,20,29,2],[0.4484,-0.1995,19,20,29,2],[-0.1995,-0.1854,19,20,29,2],[0.4343,-0.1854,19,20,29,2],[0.4484,-0.1854,19,20,29,2],[0.4343,-0.1714,19,20,29,2],[0.4484,-0.1714,19,20,29,2],[0.4343,-0.1573,19,20,29,2],[0.4484,-0.1573,19,20,29,2],[0.4343,-0.1432,19,20,29,2],[0.4484,-0.1432,19,20,29,2],[0.4343,-0.1291,19,20,29,2],[0.4484,-0.1291,19,20,29,2],[0.4343,-0.115,19,20,29,2],[0.4484,-0.115,19,20,29,2],[0.4343,-0.1009,19,20,29,2],[0.4484,-0.1009,19,20,29,2],[0.4343,-0.0869,19,20,29,2],[0.4484,-0.0869,19,20,29,2],[-0.1854,-0.0728,19,20,29,2],[-0.1714,-0.0728,19,20,29,2],[-0.1573,-0.0728,19,20,29,2],[-0.1432,-0.0728,19,20,29,2],[-0.1291,-0.0728,19,20,29,2],[0.1667,-0.0728,19,20,29,2],[0.1808,-0.0728,19,20,29,2],[0.1948,-0.0728,19,20,29,2],[0.2089,-0.0728,19,20,29,2],[0.4343,-0.0728,19,20,29,2],[0.4484,-0.0728,19,20,29,2],[0.4624,-0.0728,19,20,29,2],[-0.2136,-0.0587,19,20,29,2],[-0.1995,-0.0587,19,20,29,2],[-0.1854,-0.0587,19,20,29,2],[-0.1714,-0.0587,19,20,29,2],[-0.1573,-0.0587,19,20,29,2],[-0.1432,-0.0587,19,20,29,2],[-0.1291,-0.0587,19,20,29,2],[-0.115,-0.0587,19,20,29,2],[0.1526,-0.0587,19,20,29,2],[0.1667,-0.0587,19,20,29,2],[0.1808,-0.0587,19,20,29,2],[0.1948,-0.0587,19,20,29,2],[0.2089,-0.0587,19,20,29,2],[0.223,-0.0587,19,20,29,2],[0.2371,-0.0587,19,20,29,2],[0.2512,-0.0587,19,20,29,2],[0.4484,-0.0587,19,20,29,2],[0.4624,-0.0587,19,20,29,2],[-0.2136,-0.0446,19,20,29,2],[0.2371,-0.0446,19,20,29,2],[0.4484,-0.0446,19,20,29,2],[0.4624,-0.0446,19,20,29,2],[-0.3545,-0.0305,19,20,29,2],[-0.3685,-0.0164,19,20,29,2],[-0.3545,-0.0164,19,20,29,2],[-0.2981,-0.0164,19,20,29,2],[0.2653,-0.0164,19,20,29,2],[0.2793,-0.0164,19,20,29,2],[0.3216,-0.0164,19,20,29,2],[0.3638,-0.0164,19,20,29,2],[0.4484,-0.0164,19,20,29,2],[-0.3685,-0.0023,19,20,29,2],[-0.3122,-0.0023,19,20,29,2],[-0.2981,-0.0023,19,20,29,2],[-0.27,-0.0023,19,20,29,2],[-0.2559,-0.0023,19,20,29,2],[0.2653,-0.0023,19,20,29,2],[0.2793,-0.0023,19,20,29,2],[0.3216,-0.0023,19,20,29,2],[0.3638,-0.0023,19,20,29,2],[0.4061,-0.0023,19,20,29,2],[0.4765,-0.0023,19,20,29,2],[-0.3826,0.0117,19,20,29,2],[-0.3685,0.0117,19,20,29,2],[-0.3263,0.0117,19,20,29,2],[-0.3122,0.0117,19,20,29,2],[-0.27,0.0117,19,20,29,2],[-0.2277,0.0117,19,20,29,2],[0.2653,0.0117,19,20,29,2],[0.3075,0.0117,19,20,29,2],[0.3216,0.0117,19,20,29,2],[0.3498,0.0117,19,20,29,2],[0.3638,0.0117,19,20,29,2],[0.392,0.0117,19,20,29,2],[0.4061,0.0117,19,20,29,2],[-0.3826,0.0258,19,20,29,2],[-0.3263,0.0258,19,20,29,2],[-0.3122,0.0258,19,20,29,2],[-0.284,0.0258,19,20,29,2],[-0.27,0.0258,19,20,29,2],[-0.2277,0.0258,19,20,29,2],[0.0258,0.0258,19,20,29,2],[0.2512,0.0258,19,20,29,2],[0.2653,0.0258,19,20,29,2],[0.3075,0.0258,19,20,29,2],[0.3216,0.0258,19,20,29,2],[0.3498,0.0258,19,20,29,2],[0.3638,0.0258,19,20,29,2],[0.392,0.0258,19,20,29,2],[-0.2277,0.0399,19,20,29,2],[-0.0446,0.0399,19,20,29,2],[0.0117,0.0399,19,20,29,2],[0.0258,0.0399,19,20,29,2],[-0.0446,0.054,19,20,29,2],[-0.0305,0.054,19,20,29,2],[0.0117,0.054,19,20,29,2],[0.0258,0.054,19,20,29,2],[0.0399,0.054,19,20,29,2],[0.0962,0.054,19,20,29,2],[-0.0446,0.0681,19,20,29,2],[-0.0305,0.0681,19,20,29,2],[-0.0164,0.0681,19,20,29,2],[-0.0023,0.0681,19,20,29,2],[0.0117,0.0681,19,20,29,2],[0.0258,0.0681,19,20,29,2],[0.0399,0.0681,19,20,29,2],[0.0822,0.0681,19,20,29,2],[0.0962,0.0681,19,20,29,2],[-0.0164,0.0822,19,20,29,2],[-0.0023,0.0822,19,20,29,2],[0.0399,0.0822,19,20,29,2],[0.054,0.0822,19,20,29,2],[0.0681,0.0822,19,20,29,2],[0.0822,0.0822,19,20,29,2],[-0.0164,0.0962,19,20,29,2],[-0.0023,0.0962,19,20,29,2],[0.0681,0.0962,19,20,29,2],[-0.0164,0.1103,19,20,29,2],[-0.0023,0.1103,19,20,29,2],[0.054,0.1103,19,20,29,2],[0.0681,0.1103,19,20,29,2],[-0.4812,0.1244,19,20,29,2],[-0.0023,0.1244,19,20,29,2],[0.0117,0.1244,19,20,29,2],[0.054,0.1244,19,20,29,2],[0.0117,0.1385,19,20,29,2],[0.0258,0.1385,19,20,29,2],[0.0399,0.1385,19,20,29,2],[0.054,0.1385,19,20,29,2],[0.4765,0.1667,19,20,29,2],[-0.4249,0.1808,19,20,29,2],[-0.4812,0.1948,19,20,29,2],[-0.4249,0.1948,19,20,29,2],[0.0117,0.1948,19,20,29,2],[0.0258,0.1948,19,20,29,2],[0.054,0.1948,19,20,29,2],[-0.4812,0.2089,19,20,29,2],[0.0117,0.2089,19,20,29,2],[0.0258,0.2089,19,20,29,2],[0.0399,0.2089,19,20,29,2],[-0.4812,0.223,19,20,29,2],[-0.4671,0.223,19,20,29,2],[-0.4671,0.2371,19,20,29,2],[0.4484,0.2371,19,20,29,2],[0.4484,0.2512,19,20,29,2],[0.4061,0.3357,19,20,29,2],[-0.3404,0.392,19,20,29,2],[-0.3122,0.4343,19,20,29,2],[0.2653,0.5188,19,20,29,2],[0.0258,0.5751,19,20,29,2],[0.1103,0.5751,19,20,29,2],[0.1103,0.6174,19,20,29,2]],[[-0.1388,-0.2643,113,104,89,0],[-0.1784,-0.0264,252,255,254,0],[0.0198,0.1322,123,117,98,0],[-0.4559,0.3304,132,131,113,0],[-0.4163,0.4493,227,227,227,0],[-0.3767,0.4493,131,126,112,0],[-0.4163,0.489,143,143,143,0],[-0.4559,0.5286,254,254,254,0],[-0.4163,0.5286,254,254,254,0],[-0.4163,0.5683,255,255,255,0],[-0.3767,0.5683,203,203,203,0],[-0.4559,0.6079,254,254,254,0],[-0.4163,0.6079,255,255,255,0],[-0.3767,0.6079,255,255,255,0],[-0.4559,0.6476,244,244,244,0],[-0.4163,0.6476,206,206,206,0],[-0.3767,0.6476,179,179,179,0],[-0.337,0.6476,254,254,254,0],[-0.0463,-0.7533,253,240,206,1],[0.0859,-0.7533,247,240,208,1],[-0.0463,-0.7269,255,238,206,1],[-0.0198,-0.7269,250,210,203,1],[0.0859,-0.7269,253,236,201,1],[0.1123,-0.7269,250,237,216,1],[-0.033,-0.7137,243,201,195,1],[-0.0198,-0.7137,255,192,203,1],[-0.0066,-0.7137,195,153,162,1],[-0.0463,-0.7004,255,234,210,1],[-0.033,-0.7004,251,199,196,1],[-0.0198,-0.7004,253,197,204,1],[-0.0066,-0.7004,255,195,206,1],[0.0859,-0.7004,251,240,200,1],[0.1123,-0.7004,255,193,199,1],[0.1256,-0.7004,251,194,209,1],[-0.033,-0.6872,253,198,196,1],[-0.0198,-0.6872,253,197,202,1],[-0.0066,-0.6872,253,197,202,1],[0.1123,-0.6872,255,194,202,1],[0.1256,-0.6872,254,195,208,1],[-0.0463,-0.674,255,235,206,1],[-0.033,-0.674,250,196,194,1],[-0.0198,-0.674,251,196,201,1],[-0.0066,-0.674,248,198,201,1],[0.0066,-0.674,161,128,135,1],[0.0595,-0.674,219,212,185,1],[0.0859,-0.674,251,242,202,1],[0.1123,-0.674,255,194,202,1],[0.1256,-0.674,254,195,206,1],[0.1388,-0.674,250,196,205,1],[-0.033,-0.6608,249,194,195,1],[-0.0198,-0.6608,251,196,201,1],[-0.0066,-0.6608,248,198,201,1],[0.0066,-0.6608,242,194,206,1],[0.1123,-0.6608,255,193,201,1],[0.1256,-0.6608,251,196,201,1],[0.1388,-0.6608,252,193,204,1],[-0.0463,-0.6476,255,235,206,1],[-0.033,-0.6476,247,192,194,1],[-0.0198,-0.6476,251,196,201,1],[-0.0066,-0.6476,255,195,202,1],[0.0066,-0.6476,255,201,216,1],[0.0595,-0.6476,249,240,212,1],[0.0859,-0.6476,253,241,202,1],[0.1123,-0.6476,255,194,202,1],[0.1256,-0.6476,254,196,202,1],[0.1388,-0.6476,255,192,202,1],[0.152,-0.6476,113,82,90,1],[-0.033,-0.6344,254,205,201,1],[-0.0198,-0.6344,251,196,201,1],[-0.0066,-0.6344,255,194,200,1],[0.0066,-0.6344,248,187,198,1],[0.1123,-0.6344,255,194,202,1],[0.1256,-0.6344,254,197,200,1],[0.1388,-0.6344,255,194,202,1],[0.152,-0.6344,218,174,179,1],[-0.0463,-0.6211,251,238,206,1],[-0.033,-0.6211,252,206,197,1],[-0.0198,-0.6211,251,196,201,1],[-0.0066,-0.6211,255,195,200,1],[0.0066,-0.6211,252,192,201,1],[0.0595,-0.6211,247,239,207,1],[0.0859,-0.6211,253,239,200,1],[0.1123,-0.6211,255,193,201,1],[0.1256,-0.6211,253,196,199,1],[0.1388,-0.6211,255,194,202,1],[0.152,-0.6211,248,202,206,1],[-0.0198,-0.6079,251,196,201,1],[-0.0066,-0.6079,255,195,202,1],[0.0066,-0.6079,255,197,203,1],[0.0198,-0.6079,160,133,131,1],[0.1123,-0.6079,255,192,200,1],[0.1256,-0.6079,252,194,198,1],[0.1388,-0.6079,255,193,201,1],[0.152,-0.6079,244,198,200,1],[-0.0463,-0.5947,250,238,203,1],[-0.0198,-0.5947,251,196,203,1],[-0.0066,-0.5947,255,196,200,1],[0.0066,-0.5947,255,197,203,1],[0.0198,-0.5947,213,169,173,1],[0.0595,-0.5947,247,239,207,1],[0.0859,-0.5947,251,240,200,1],[0.1123,-0.5947,255,192,200,1],[0.1256,-0.5947,252,194,198,1],[0.1388,-0.5947,255,194,203,1],[0.152,-0.5947,248,199,206,1],[-0.0198,-0.5815,251,196,203,1],[-0.0066,-0.5815,255,196,200,1],[0.0066,-0.5815,255,196,200,1],[0.0198,-0.5815,239,193,195,1],[0.1123,-0.5815,255,193,201,1],[0.1256,-0.5815,255,195,199,1],[0.1388,-0.5815,253,195,203,1],[0.152,-0.5815,248,199,206,1],[-0.0463,-0.5683,253,238,202,1],[-0.0198,-0.5683,249,196,198,1],[-0.0066,-0.5683,255,195,199,1],[0.0066,-0.5683,255,196,200,1],[0.0198,-0.5683,248,200,202,1],[0.0595,-0.5683,247,239,207,1],[0.0859,-0.5683,250,240,200,1],[0.1123,-0.5683,253,195,201,1],[0.1256,-0.5683,255,195,199,1],[0.1388,-0.5683,251,196,203,1],[0.152,-0.5683,239,187,196,1],[-0.0198,-0.5551,247,198,192,1],[-0.0066,-0.5551,255,193,198,1],[0.0066,-0.5551,255,195,199,1],[0.0198,-0.5551,247,198,201,1],[0.1123,-0.5551,253,197,202,1],[0.1256,-0.5551,255,196,200,1],[0.1388,-0.5551,254,196,204,1],[0.152,-0.5551,249,193,203,1],[-0.0463,-0.5419,251,238,206,1],[-0.0198,-0.5419,249,202,195,1],[-0.0066,-0.5419,255,194,199,1],[0.0066,-0.5419,255,194,199,1],[0.0198,-0.5419,248,198,201,1],[0.0595,-0.5419,248,240,208,1],[0.0859,-0.5419,250,240,200,1],[0.1123,-0.5419,253,197,202,1],[0.1256,-0.5419,255,195,200,1],[0.1388,-0.5419,255,195,204,1],[0.152,-0.5419,253,195,203,1],[-0.0198,-0.5286,249,202,195,1],[-0.0066,-0.5286,255,194,199,1],[0.0066,-0.5286,255,194,199,1],[0.0198,-0.5286,248,198,201,1],[0.1123,-0.5286,253,197,202,1],[0.1256,-0.5286,255,195,200,1],[0.1388,-0.5286,255,195,204,1],[0.152,-0.5286,251,195,205,1],[-0.0463,-0.5154,250,239,206,1],[-0.0198,-0.5154,246,202,194,1],[-0.0066,-0.5154,255,194,199,1],[0.0066,-0.5154,255,194,199,1],[0.0198,-0.5154,250,197,201,1],[0.0595,-0.5154,248,240,208,1],[0.0859,-0.5154,250,240,200,1],[0.1123,-0.5154,253,197,202,1],[0.1256,-0.5154,255,195,200,1],[0.1388,-0.5154,255,195,204,1],[0.152,-0.5154,255,200,210,1],[-0.0066,-0.5022,255,195,199,1],[0.0066,-0.5022,255,195,199,1],[0.0198,-0.5022,248,198,201,1],[0.1123,-0.5022,253,197,202,1],[0.1256,-0.5022,255,195,200,1],[0.1388,-0.5022,255,195,202,1],[0.152,-0.5022,241,190,198,1],[-0.0463,-0.489,251,239,202,1],[-0.0198,-0.489,255,223,207,1],[-0.0066,-0.489,253,196,199,1],[0.0066,-0.489,253,196,199,1],[0.0198,-0.489,245,199,201,1],[0.0595,-0.489,250,239,208,1],[0.0859,-0.489,250,240,200,1],[0.1123,-0.489,253,197,202,1],[0.1256,-0.489,255,196,198,1],[0.1388,-0.489,255,196,198,1],[0.152,-0.489,243,201,206,1],[-0.0066,-0.4758,251,196,201,1],[0.0066,-0.4758,251,196,201,1],[0.0198,-0.4758,245,199,203,1],[0.1123,-0.4758,254,196,202,1],[0.1256,-0.4758,255,196,198,1],[0.1388,-0.4758,255,196,198,1],[0.152,-0.4758,210,168,176,1],[-0.0463,-0.4626,253,238,202,1],[-0.0198,-0.4626,255,223,205,1],[-0.0066,-0.4626,251,196,201,1],[0.0066,-0.4626,251,196,201,1],[0.0198,-0.4626,245,199,203,1],[0.0595,-0.4626,250,239,208,1],[0.0859,-0.4626,250,240,200,1],[0.1123,-0.4626,255,194,201,1],[0.1256,-0.4626,255,195,199,1],[0.1388,-0.4626,253,197,200,1],[0.152,-0.4626,189,147,157,1],[-0.0066,-0.4493,251,196,203,1],[0.0066,-0.4493,251,196,203,1],[0.0198,-0.4493,245,198,205,1],[0.1123,-0.4493,255,192,200,1],[0.1256,-0.4493,252,194,198,1],[0.1388,-0.4493,251,196,201,1],[0.152,-0.4493,121,85,95,1],[-0.0463,-0.4361,250,239,206,1],[-0.0198,-0.4361,255,223,207,1],[-0.0066,-0.4361,253,194,205,1],[0.0066,-0.4361,251,192,203,1],[0.0198,-0.4361,233,186,195,1],[0.0595,-0.4361,250,237,207,1],[0.0859,-0.4361,251,240,200,1],[0.1123,-0.4361,255,193,201,1],[0.1256,-0.4361,251,196,199,1],[0.1388,-0.4361,255,193,203,1],[-0.0066,-0.4229,255,194,201,1],[0.0066,-0.4229,255,195,202,1],[0.0198,-0.4229,222,175,182,1],[0.0991,-0.4229,250,203,200,1],[0.1123,-0.4229,252,194,200,1],[0.1256,-0.4229,249,196,200,1],[0.1388,-0.4229,254,196,204,1],[-0.0463,-0.4097,242,235,208,1],[-0.0198,-0.4097,254,227,211,1],[-0.0066,-0.4097,255,195,199,1],[0.0066,-0.4097,253,194,198,1],[0.0198,-0.4097,185,141,145,1],[0.0595,-0.4097,254,239,206,1],[0.0859,-0.4097,254,240,202,1],[0.0991,-0.4097,251,198,202,1],[0.1123,-0.4097,250,195,198,1],[0.1256,-0.4097,250,195,200,1],[0.1388,-0.4097,247,191,198,1],[-0.0066,-0.3965,255,193,201,1],[0.0066,-0.3965,255,194,197,1],[0.0198,-0.3965,151,105,107,1],[0.0991,-0.3965,249,196,198,1],[0.1123,-0.3965,253,195,201,1],[0.1256,-0.3965,253,195,203,1],[0.1388,-0.3965,254,198,205,1],[-0.0463,-0.3833,201,194,167,1],[-0.0198,-0.3833,251,235,197,1],[-0.0066,-0.3833,255,195,199,1],[0.0066,-0.3833,235,180,183,1],[0.0595,-0.3833,253,238,204,1],[0.0859,-0.3833,254,239,206,1],[0.1123,-0.3833,251,196,201,1],[0.1256,-0.3833,255,193,203,1],[0.1388,-0.3833,223,181,186,1],[0.0066,-0.37,255,203,209,1],[0.1123,-0.37,245,201,191,1],[0.1256,-0.37,247,195,195,1],[-0.2048,-0.3568,222,222,193,1],[-0.1784,-0.3568,252,241,213,1],[-0.152,-0.3568,250,239,206,1],[-0.1256,-0.3568,248,237,204,1],[-0.0991,-0.3568,251,241,204,1],[-0.0727,-0.3568,255,244,207,1],[-0.0463,-0.3568,193,182,149,1],[-0.0198,-0.3568,250,238,199,1],[0.0595,-0.3568,253,240,206,1],[0.0859,-0.3568,254,240,202,1],[0.1123,-0.3568,255,230,205,1],[-0.2841,-0.3304,225,212,196,1],[-0.2577,-0.3304,249,243,197,1],[-0.2313,-0.3304,250,240,204,1],[-0.2048,-0.3304,251,239,202,1],[-0.1784,-0.3304,251,239,202,1],[-0.152,-0.3304,251,239,202,1],[-0.1256,-0.3304,251,239,202,1],[-0.0991,-0.3304,253,240,204,1],[-0.0727,-0.3304,253,240,204,1],[-0.0463,-0.3304,251,240,200,1],[-0.0198,-0.3304,251,239,202,1],[0.0066,-0.3304,249,238,207,1],[0.033,-0.3304,248,237,206,1],[0.0595,-0.3304,250,240,204,1],[0.0859,-0.3304,254,240,204,1],[0.1123,-0.3304,253,240,206,1],[0.1388,-0.3304,241,233,199,1],[0.1652,-0.3304,249,238,205,1],[-0.337,-0.304,165,164,142,1],[-0.3106,-0.304,250,237,209,1],[-0.2841,-0.304,253,240,206,1],[-0.2577,-0.304,251,239,202,1],[-0.2313,-0.304,250,240,202,1],[-0.2048,-0.304,251,239,204,1],[-0.1784,-0.304,251,239,202,1],[-0.152,-0.304,251,239,202,1],[-0.1256,-0.304,251,239,202,1],[-0.0991,-0.304,253,240,204,1],[-0.0727,-0.304,253,240,204,1],[-0.0463,-0.304,251,239,202,1],[-0.0198,-0.304,251,239,202,1],[0.0066,-0.304,251,239,202,1],[0.033,-0.304,251,239,202,1],[0.0595,-0.304,251,239,202,1],[0.0859,-0.304,251,239,202,1],[0.1123,-0.304,251,239,202,1],[0.1388,-0.304,250,240,202,1],[0.1652,-0.304,251,239,202,1],[0.1916,-0.304,251,239,202,1],[0.2181,-0.304,251,239,202,1],[0.2445,-0.304,254,242,205,1],[0.2709,-0.304,244,236,200,1],[-0.3634,-0.2775,250,237,207,1],[-0.337,-0.2775,252,237,201,1],[-0.3106,-0.2775,253,240,204,1],[-0.2841,-0.2775,253,240,204,1],[-0.2577,-0.2775,251,239,202,1],[-0.2313,-0.2775,251,239,202,1],[-0.2048,-0.2775,251,239,204,1],[-0.1784,-0.2775,251,239,204,1],[-0.152,-0.2775,251,240,200,1],[-0.1256,-0.2775,251,240,208,1],[-0.0991,-0.2775,249,237,209,1],[-0.0727,-0.2775,255,245,203,1],[-0.0463,-0.2775,251,239,202,1],[-0.0198,-0.2775,251,239,202,1],[0.0066,-0.2775,251,239,202,1],[0.033,-0.2775,251,239,202,1],[0.0595,-0.2775,251,239,202,1],[0.0859,-0.2775,251,239,202,1],[0.1123,-0.2775,251,239,202,1],[0.1388,-0.2775,251,239,202,1],[0.1652,-0.2775,251,239,202,1],[0.1916,-0.2775,251,239,202,1],[0.2181,-0.2775,251,239,202,1],[0.2445,-0.2775,251,239,202,1],[0.2709,-0.2775,251,239,202,1],[0.2974,-0.2775,250,240,202,1],[0.3238,-0.2775,239,234,211,1],[-0.3899,-0.2511,243,232,201,1],[-0.3634,-0.2511,253,236,201,1],[-0.337,-0.2511,252,237,201,1],[-0.3106,-0.2511,253,241,202,1],[-0.2841,-0.2511,253,240,204,1],[-0.2577,-0.2511,251,239,202,1],[-0.2313,-0.2511,253,238,202,1],[-0.2048,-0.2511,251,239,202,1],[-0.1784,-0.2511,250,240,204,1],[-0.0463,-0.2511,248,240,204,1],[-0.0198,-0.2511,251,239,202,1],[0.0066,-0.2511,251,239,202,1],[0.033,-0.2511,251,239,202,1],[0.0595,-0.2511,251,239,202,1],[0.0859,-0.2511,251,239,202,1],[0.1123,-0.2511,251,239,202,1],[0.1388,-0.2511,251,240,200,1],[0.1652,-0.2511,251,239,202,1],[0.1916,-0.2511,251,239,202,1],[0.2181,-0.2511,251,239,202,1],[0.2445,-0.2511,251,239,202,1],[0.2709,-0.2511,251,239,202,1],[0.2974,-0.2511,250,240,202,1],[0.3238,-0.2511,248,241,200,1],[0.3502,-0.2511,251,238,206,1],[-0.4163,-0.2247,245,241,208,1],[-0.3899,-0.2247,251,239,202,1],[-0.3634,-0.2247,251,239,202,1],[-0.337,-0.2247,251,239,202,1],[-0.3106,-0.2247,251,239,202,1],[-0.2841,-0.2247,251,239,202,1],[-0.2577,-0.2247,251,239,204,1],[-0.2313,-0.2247,251,239,202,1],[-0.152,-0.2247,253,240,208,1],[-0.1256,-0.2247,253,241,200,1],[-0.0991,-0.2247,251,240,200,1],[-0.0727,-0.2247,251,239,204,1],[-0.0463,-0.2247,251,240,200,1],[-0.0198,-0.2247,251,239,202,1],[0.0066,-0.2247,251,239,202,1],[0.033,-0.2247,251,239,202,1],[0.0595,-0.2247,251,239,202,1],[0.0859,-0.2247,251,239,202,1],[0.1123,-0.2247,251,239,202,1],[0.2445,-0.2247,249,244,205,1],[0.2709,-0.2247,251,239,202,1],[0.2974,-0.2247,251,239,202,1],[0.3238,-0.2247,251,239,202,1],[0.3502,-0.2247,251,239,202,1],[0.3767,-0.2247,246,233,199,1],[-0.4163,-0.1982,252,237,201,1],[-0.3899,-0.1982,253,239,200,1],[-0.3634,-0.1982,250,240,202,1],[-0.337,-0.1982,250,240,204,1],[-0.3106,-0.1982,251,239,202,1],[-0.2841,-0.1982,251,239,202,1],[-0.2577,-0.1982,251,240,198,1],[-0.2313,-0.1982,242,236,204,1],[-0.1784,-0.1982,247,240,208,1],[-0.152,-0.1982,250,238,203,1],[-0.1256,-0.1982,254,240,204,1],[-0.0991,-0.1982,253,240,204,1],[-0.0727,-0.1982,253,240,204,1],[-0.0463,-0.1982,251,239,202,1],[-0.0198,-0.1982,251,239,202,1],[0.0066,-0.1982,251,239,202,1],[0.033,-0.1982,251,239,202,1],[0.0595,-0.1982,251,239,202,1],[0.0859,-0.1982,251,239,202,1],[0.1123,-0.1982,251,239,202,1],[0.1388,-0.1982,255,246,209,1],[0.1652,-0.1982,250,238,201,1],[0.1916,-0.1982,253,244,206,1],[0.2181,-0.1982,226,222,194,1],[0.2709,-0.1982,144,136,116,1],[0.2974,-0.1982,247,242,202,1],[0.3238,-0.1982,251,238,206,1],[0.3502,-0.1982,251,240,200,1],[0.3767,-0.1982,252,237,201,1],[0.4031,-0.1982,247,232,199,1],[-0.4427,-0.1718,249,238,196,1],[-0.4163,-0.1718,254,239,206,1],[-0.3899,-0.1718,251,239,202,1],[-0.3634,-0.1718,251,239,202,1],[-0.337,-0.1718,251,239,202,1],[-0.3106,-0.1718,251,239,202,1],[-0.2841,-0.1718,251,239,202,1],[-0.2577,-0.1718,253,241,202,1],[-0.2048,-0.1718,249,241,210,1],[-0.1784,-0.1718,250,240,202,1],[-0.152,-0.1718,253,238,202,1],[-0.1256,-0.1718,251,239,202,1],[-0.0991,-0.1718,251,239,202,1],[-0.0727,-0.1718,251,239,202,1],[-0.0463,-0.1718,251,239,202,1],[-0.0198,-0.1718,251,239,202,1],[0.0066,-0.1718,251,239,202,1],[0.033,-0.1718,251,239,202,1],[0.0595,-0.1718,251,239,202,1],[0.0859,-0.1718,251,239,202,1],[0.1123,-0.1718,251,239,202,1],[0.1388,-0.1718,251,239,202,1],[0.1652,-0.1718,251,239,202,1],[0.1916,-0.1718,251,239,202,1],[0.2181,-0.1718,251,239,202,1],[0.2445,-0.1718,250,240,204,1],[0.2974,-0.1718,238,228,206,1],[0.3238,-0.1718,251,241,204,1],[0.3502,-0.1718,253,241,202,1],[0.3767,-0.1718,253,240,204,1],[0.4031,-0.1718,251,239,202,1],[0.4295,-0.1718,195,192,164,1],[-0.4692,-0.1454,248,240,206,1],[-0.4427,-0.1454,250,238,199,1],[-0.4163,-0.1454,253,240,206,1],[-0.3899,-0.1454,251,239,202,1],[-0.3634,-0.1454,251,239,202,1],[-0.337,-0.1454,251,239,202,1],[-0.3106,-0.1454,251,239,202,1],[-0.2841,-0.1454,251,239,202,1],[-0.2577,-0.1454,255,248,201,1],[-0.2048,-0.1454,251,241,206,1],[-0.1784,-0.1454,251,239,202,1],[-0.152,-0.1454,251,239,202,1],[-0.1256,-0.1454,251,239,202,1],[-0.0991,-0.1454,251,239,202,1],[-0.0727,-0.1454,250,240,202,1],[-0.0463,-0.1454,251,239,202,1],[-0.0198,-0.1454,251,239,202,1],[0.0066,-0.1454,251,239,202,1],[0.033,-0.1454,251,239,202,1],[0.0595,-0.1454,251,239,202,1],[0.0859,-0.1454,251,239,202,1],[0.1123,-0.1454,251,239,202,1],[0.1388,-0.1454,251,239,202,1],[0.1652,-0.1454,251,239,202,1],[0.1916,-0.1454,251,239,202,1],[0.2181,-0.1454,251,239,202,1],[0.2445,-0.1454,251,240,200,1],[0.2709,-0.1454,240,232,198,1],[0.3238,-0.1454,250,240,204,1],[0.3502,-0.1454,253,240,204,1],[0.3767,-0.1454,253,240,204,1],[0.4031,-0.1454,253,240,204,1],[0.4295,-0.1454,242,236,191,1],[-0.4692,-0.1189,251,239,202,1],[-0.4427,-0.1189,251,240,200,1],[-0.4163,-0.1189,253,240,204,1],[-0.3899,-0.1189,251,239,202,1],[-0.3634,-0.1189,251,239,202,1],[-0.337,-0.1189,251,239,202,1],[-0.3106,-0.1189,251,239,202,1],[-0.2841,-0.1189,251,239,202,1],[-0.2577,-0.1189,250,237,205,1],[-0.2313,-0.1189,244,235,204,1],[-0.2048,-0.1189,250,240,202,1],[-0.1784,-0.1189,251,239,204,1],[-0.152,-0.1189,250,240,202,1],[-0.1256,-0.1189,251,239,202,1],[-0.0991,-0.1189,251,239,202,1],[-0.0727,-0.1189,251,239,202,1],[-0.0463,-0.1189,251,239,202,1],[-0.0198,-0.1189,251,239,202,1],[0.0066,-0.1189,251,239,202,1],[0.033,-0.1189,251,239,202,1],[0.0595,-0.1189,251,239,202,1],[0.0859,-0.1189,251,239,202,1],[0.1123,-0.1189,251,239,202,1],[0.1388,-0.1189,251,239,202,1],[0.1652,-0.1189,251,239,202,1],[0.1916,-0.1189,251,239,202,1],[0.2181,-0.1189,251,239,202,1],[0.2445,-0.1189,251,239,202,1],[0.2709,-0.1189,250,240,204,1],[0.3238,-0.1189,248,241,212,1],[0.3502,-0.1189,251,239,202,1],[0.3767,-0.1189,253,240,204,1],[0.4031,-0.1189,253,240,204,1],[0.4295,-0.1189,253,240,204,1],[0.4559,-0.1189,239,229,205,1],[-0.4692,-0.0925,251,239,204,1],[-0.4427,-0.0925,251,239,202,1],[-0.4163,-0.0925,251,239,202,1],[-0.3899,-0.0925,251,239,202,1],[-0.3634,-0.0925,251,239,202,1],[-0.337,-0.0925,251,239,202,1],[-0.3106,-0.0925,251,239,202,1],[-0.2841,-0.0925,251,239,202,1],[-0.2577,-0.0925,251,239,202,1],[-0.2313,-0.0925,250,238,201,1],[-0.2048,-0.0925,251,239,202,1],[-0.1784,-0.0925,251,239,202,1],[-0.152,-0.0925,251,239,202,1],[-0.1256,-0.0925,250,240,202,1],[-0.0991,-0.0925,251,239,202,1],[-0.0727,-0.0925,251,239,202,1],[-0.0463,-0.0925,251,239,202,1],[-0.0198,-0.0925,251,239,202,1],[0.0066,-0.0925,251,239,202,1],[0.033,-0.0925,251,239,202,1],[0.0595,-0.0925,251,239,202,1],[0.0859,-0.0925,251,239,202,1],[0.1123,-0.0925,251,239,202,1],[0.1388,-0.0925,251,239,202,1],[0.1652,-0.0925,251,239,202,1],[0.1916,-0.0925,251,239,202,1],[0.2181,-0.0925,251,239,202,1],[0.2445,-0.0925,251,239,202,1],[0.2709,-0.0925,248,240,204,1],[0.2974,-0.0925,185,184,161,1],[0.3502,-0.0925,250,238,201,1],[0.3767,-0.0925,251,239,202,1],[0.4031,-0.0925,251,239,202,1],[0.4295,-0.0925,251,239,202,1],[0.4559,-0.0925,253,241,200,1],[-0.4692,-0.0661,251,239,202,1],[-0.4427,-0.0661,251,239,202,1],[-0.4163,-0.0661,253,238,202,1],[-0.3899,-0.0661,251,239,202,1],[-0.3634,-0.0661,251,239,202,1],[-0.337,-0.0661,251,239,202,1],[-0.3106,-0.0661,251,239,202,1],[-0.2841,-0.0661,251,239,202,1],[-0.2577,-0.0661,251,239,202,1],[-0.2313,-0.0661,253,238,204,1],[-0.2048,-0.0661,249,236,204,1],[-0.1784,-0.0661,228,222,190,1],[-0.152,-0.0661,245,237,203,1],[-0.1256,-0.0661,251,240,198,1],[-0.0991,-0.0661,251,239,202,1],[-0.0727,-0.0661,251,239,202,1],[-0.0463,-0.0661,251,239,202,1],[-0.0198,-0.0661,251,239,202,1],[0.0066,-0.0661,251,239,202,1],[0.033,-0.0661,251,239,202,1],[0.0595,-0.0661,251,239,202,1],[0.0859,-0.0661,251,239,202,1],[0.1123,-0.0661,251,239,202,1],[0.1388,-0.0661,251,239,202,1],[0.1652,-0.0661,251,239,202,1],[0.1916,-0.0661,251,239,202,1],[0.2181,-0.0661,251,239,202,1],[0.2445,-0.0661,251,239,202,1],[0.2709,-0.0661,250,240,204,1],[0.2974,-0.0661,252,242,205,1],[0.3502,-0.0661,253,240,204,1],[0.3767,-0.0661,251,239,202,1],[0.4031,-0.0661,251,239,202,1],[0.4295,-0.0661,251,239,202,1],[0.4559,-0.0661,254,240,202,1],[-0.4692,-0.0396,251,239,204,1],[-0.4427,-0.0396,251,239,202,1],[-0.4163,-0.0396,253,239,200,1],[-0.3899,-0.0396,251,239,202,1],[-0.3634,-0.0396,251,239,202,1],[-0.337,-0.0396,251,239,202,1],[-0.3106,-0.0396,251,239,202,1],[-0.2841,-0.0396,251,239,204,1],[-0.2577,-0.0396,250,240,202,1],[-0.2313,-0.0396,251,239,202,1],[-0.0991,-0.0396,251,240,200,1],[-0.0727,-0.0396,250,240,202,1],[-0.0463,-0.0396,251,239,202,1],[-0.0198,-0.0396,251,239,202,1],[0.0066,-0.0396,251,239,202,1],[0.033,-0.0396,251,239,202,1],[0.0595,-0.0396,251,239,202,1],[0.0859,-0.0396,251,239,202,1],[0.1123,-0.0396,251,240,200,1],[0.1388,-0.0396,251,239,204,1],[0.1652,-0.0396,251,238,206,1],[0.1916,-0.0396,251,239,204,1],[0.2181,-0.0396,251,239,202,1],[0.2445,-0.0396,251,239,202,1],[0.2709,-0.0396,251,239,202,1],[0.2974,-0.0396,253,240,204,1],[0.3502,-0.0396,251,239,202,1],[0.3767,-0.0396,251,239,202,1],[0.4031,-0.0396,251,239,202,1],[0.4295,-0.0396,251,239,202,1],[0.4559,-0.0396,253,240,206,1],[0.4824,-0.0396,159,152,140,1],[-0.4692,-0.0132,251,239,202,1],[-0.4427,-0.0132,251,239,202,1],[-0.4163,-0.0132,251,239,202,1],[-0.3899,-0.0132,251,239,202,1],[-0.3634,-0.0132,251,239,202,1],[-0.337,-0.0132,253,240,206,1],[-0.3106,-0.0132,255,233,204,1],[-0.2841,-0.0132,249,216,195,1],[-0.2577,-0.0132,255,224,199,1],[-0.2313,-0.0132,255,238,202,1],[-0.0991,-0.0132,246,241,199,1],[-0.0727,-0.0132,251,239,202,1],[-0.0463,-0.0132,251,239,202,1],[-0.0198,-0.0132,251,239,202,1],[0.0066,-0.0132,251,239,202,1],[0.033,-0.0132,251,239,202,1],[0.0595,-0.0132,251,239,202,1],[0.0859,-0.0132,251,240,200,1],[0.1123,-0.0132,246,233,215,1],[0.2181,-0.0132,253,241,202,1],[0.2445,-0.0132,251,239,202,1],[0.2709,-0.0132,251,239,202,1],[0.2974,-0.0132,251,239,202,1],[0.3238,-0.0132,235,223,195,1],[0.3502,-0.0132,251,239,202,1],[0.3767,-0.0132,251,239,202,1],[0.4031,-0.0132,251,239,202,1],[0.4295,-0.0132,251,239,202,1],[0.4559,-0.0132,253,240,206,1],[0.4824,-0.0132,244,237,212,1],[-0.3238,0.0,239,184,186,1],[-0.3106,0.0,255,197,203,1],[-0.2974,0.0,255,195,202,1],[-0.2841,0.0,253,193,202,1],[-0.2709,0.0,253,195,203,1],[-0.2577,0.0,251,197,197,1],[-0.2445,0.0,251,199,196,1],[-0.4692,0.0132,250,240,202,1],[-0.4427,0.0132,251,239,202,1],[-0.4163,0.0132,251,239,202,1],[-0.3899,0.0132,253,238,202,1],[-0.3634,0.0132,253,223,208,1],[-0.3502,0.0132,244,191,195,1],[-0.3106,0.0132,252,199,205,1],[-0.2974,0.0132,255,194,204,1],[-0.2841,0.0132,241,199,202,1],[-0.2709,0.0132,248,197,203,1],[-0.2577,0.0132,253,195,203,1],[-0.2445,0.0132,252,194,200,1],[-0.2313,0.0132,253,195,201,1],[-0.2181,0.0132,147,122,119,1],[-0.0991,0.0132,247,242,200,1],[-0.0727,0.0132,253,238,202,1],[-0.0463,0.0132,251,239,202,1],[-0.0198,0.0132,251,239,202,1],[0.0066,0.0132,251,239,202,1],[0.033,0.0132,251,239,202,1],[0.0595,0.0132,251,239,202,1],[0.0859,0.0132,251,239,202,1],[0.2181,0.0132,250,240,204,1],[0.2445,0.0132,251,239,202,1],[0.2709,0.0132,251,239,202,1],[0.2974,0.0132,251,239,202,1],[0.3238,0.0132,251,239,202,1],[0.3502,0.0132,251,239,202,1],[0.3767,0.0132,251,239,202,1],[0.4031,0.0132,251,239,202,1],[0.4295,0.0132,251,239,202,1],[0.4559,0.0132,253,241,200,1],[0.4824,0.0132,250,235,199,1],[-0.3238,0.0264,187,145,152,1],[-0.3106,0.0264,249,193,203,1],[-0.2709,0.0264,245,196,204,1],[-0.2577,0.0264,255,198,206,1],[-0.2445,0.0264,251,192,201,1],[-0.2313,0.0264,252,194,200,1],[-0.2181,0.0264,255,204,210,1],[-0.4692,0.0396,251,239,202,1],[-0.4427,0.0396,251,239,202,1],[-0.4163,0.0396,251,239,202,1],[-0.3899,0.0396,255,238,202,1],[-0.337,0.0396,237,194,206,1],[-0.3238,0.0396,254,195,210,1],[-0.2841,0.0396,235,191,199,1],[-0.2709,0.0396,144,119,121,1],[-0.2313,0.0396,243,196,201,1],[-0.2181,0.0396,253,203,204,1],[-0.2048,0.0396,246,194,195,1],[-0.1256,0.0396,249,242,206,1],[-0.0991,0.0396,250,240,204,1],[-0.0727,0.0396,253,239,200,1],[-0.0463,0.0396,251,239,202,1],[-0.0198,0.0396,251,239,202,1],[0.0066,0.0396,251,239,202,1],[0.033,0.0396,251,239,202,1],[0.0595,0.0396,251,239,202,1],[0.0859,0.0396,253,238,202,1],[0.2181,0.0396,251,239,204,1],[0.2445,0.0396,253,240,208,1],[0.2709,0.0396,255,238,211,1],[0.2974,0.0396,255,237,211,1],[0.3238,0.0396,251,238,206,1],[0.3502,0.0396,251,239,202,1],[0.3767,0.0396,251,239,202,1],[0.4031,0.0396,251,239,202,1],[0.4295,0.0396,251,239,202,1],[0.4559,0.0396,253,240,204,1],[0.4824,0.0396,250,238,203,1],[-0.3634,0.0529,169,130,134,1],[-0.3502,0.0529,245,200,208,1],[-0.337,0.0529,248,196,207,1],[-0.3238,0.0529,200,155,166,1],[-0.2974,0.0529,167,139,142,1],[-0.2841,0.0529,249,187,203,1],[-0.2445,0.0529,242,194,204,1],[-0.2181,0.0529,162,123,127,1],[-0.2048,0.0529,249,195,191,1],[0.2709,0.0529,254,197,200,1],[0.2841,0.0529,255,195,200,1],[0.2974,0.0529,255,196,198,1],[0.3106,0.0529,251,199,198,1],[-0.4692,0.0661,251,239,202,1],[-0.4427,0.0661,251,239,202,1],[-0.4163,0.0661,251,239,202,1],[-0.3899,0.0661,245,242,204,1],[-0.3634,0.0661,253,188,196,1],[-0.3502,0.0661,255,195,207,1],[-0.337,0.0661,251,195,205,1],[-0.3238,0.0661,253,192,204,1],[-0.3106,0.0661,172,137,140,1],[-0.2974,0.0661,255,197,207,1],[-0.2841,0.0661,251,195,205,1],[-0.2577,0.0661,255,207,218,1],[-0.2181,0.0661,219,179,190,1],[-0.2048,0.0661,249,195,191,1],[-0.1784,0.0661,254,240,202,1],[-0.152,0.0661,249,239,201,1],[-0.1256,0.0661,250,239,206,1],[-0.0991,0.0661,251,239,204,1],[-0.0727,0.0661,251,240,200,1],[-0.0463,0.0661,251,239,202,1],[-0.0198,0.0661,251,240,200,1],[0.0066,0.0661,251,240,200,1],[0.033,0.0661,251,239,202,1],[0.0595,0.0661,251,239,202,1],[0.0859,0.0661,253,238,202,1],[0.1123,0.0661,255,248,215,1],[0.1916,0.0661,243,235,224,1],[0.2181,0.0661,246,209,189,1],[0.2313,0.0661,252,201,206,1],[0.2445,0.0661,249,198,204,1],[0.2577,0.0661,253,197,204,1],[0.2709,0.0661,254,196,202,1],[0.2841,0.0661,251,198,200,1],[0.2974,0.0661,254,197,200,1],[0.3106,0.0661,255,194,200,1],[0.3238,0.0661,253,197,200,1],[0.337,0.0661,246,202,196,1],[0.3502,0.0661,255,234,207,1],[0.3767,0.0661,250,240,202,1],[0.4031,0.0661,251,239,202,1],[0.4295,0.0661,251,239,202,1],[0.4559,0.0661,253,240,206,1],[0.4824,0.0661,255,242,210,1],[-0.3634,0.0793,253,194,194,1],[-0.3502,0.0793,253,194,198,1],[-0.337,0.0793,251,196,199,1],[-0.3238,0.0793,253,196,199,1],[-0.3106,0.0793,255,194,201,1],[-0.2974,0.0793,253,195,201,1],[-0.2841,0.0793,250,197,201,1],[-0.2709,0.0793,254,201,208,1],[-0.2577,0.0793,255,195,202,1],[-0.2445,0.0793,247,191,196,1],[-0.2181,0.0793,255,203,208,1],[0.2181,0.0793,252,195,194,1],[0.2577,0.0793,229,185,193,1],[0.2709,0.0793,251,195,207,1],[0.2974,0.0793,201,152,162,1],[0.3106,0.0793,247,188,199,1],[0.3238,0.0793,124,97,97,1],[0.337,0.0793,244,203,205,1],[0.3502,0.0793,253,197,200,1],[-0.4692,0.0925,251,239,202,1],[-0.4427,0.0925,251,239,202,1],[-0.4163,0.0925,251,239,202,1],[-0.3899,0.0925,251,239,204,1],[-0.3634,0.0925,255,226,215,1],[-0.3502,0.0925,244,199,196,1],[-0.337,0.0925,253,198,198,1],[-0.3238,0.0925,255,195,198,1],[-0.3106,0.0925,255,195,200,1],[-0.2974,0.0925,255,196,200,1],[-0.2841,0.0925,254,196,202,1],[-0.2709,0.0925,253,195,203,1],[-0.2577,0.0925,253,193,200,1],[-0.2445,0.0925,255,191,200,1],[-0.2313,0.0925,255,191,200,1],[-0.2181,0.0925,251,207,199,1],[-0.2048,0.0925,252,234,206,1],[-0.1784,0.0925,248,240,204,1],[-0.152,0.0925,250,240,200,1],[-0.1256,0.0925,251,240,200,1],[-0.0991,0.0925,251,239,202,1],[-0.0727,0.0925,251,239,202,1],[-0.0463,0.0925,251,239,202,1],[-0.0198,0.0925,250,240,202,1],[0.0066,0.0925,207,201,169,1],[0.033,0.0925,253,244,206,1],[0.0595,0.0925,253,240,204,1],[0.0859,0.0925,253,240,204,1],[0.1123,0.0925,251,239,202,1],[0.1388,0.0925,251,240,200,1],[0.1652,0.0925,250,240,200,1],[0.1916,0.0925,250,238,212,1],[0.2048,0.0925,255,200,200,1],[0.2181,0.0925,234,195,201,1],[0.2577,0.0925,251,199,209,1],[0.2709,0.0925,195,162,166,1],[0.2974,0.0925,248,196,207,1],[0.3106,0.0925,254,201,210,1],[0.337,0.0925,241,199,202,1],[0.3502,0.0925,251,196,201,1],[0.3767,0.0925,197,186,158,1],[0.4031,0.0925,250,238,201,1],[0.4295,0.0925,251,239,202,1],[0.4559,0.0925,253,240,204,1],[0.4824,0.0925,250,234,205,1],[-0.337,0.1057,248,206,186,1],[-0.3238,0.1057,251,193,199,1],[-0.3106,0.1057,254,196,202,1],[-0.2974,0.1057,254,196,202,1],[-0.2841,0.1057,255,198,201,1],[-0.2709,0.1057,249,192,195,1],[-0.2577,0.1057,255,191,198,1],[-0.2445,0.1057,254,197,198,1],[0.2048,0.1057,243,202,204,1],[0.2445,0.1057,255,203,214,1],[0.2577,0.1057,252,198,207,1],[0.2974,0.1057,251,192,203,1],[0.337,0.1057,255,195,205,1],[-0.4692,0.1189,251,239,202,1],[-0.4427,0.1189,251,239,202,1],[-0.4163,0.1189,251,239,202,1],[-0.3899,0.1189,251,239,202,1],[-0.3634,0.1189,255,238,202,1],[-0.337,0.1189,255,234,203,1],[-0.3106,0.1189,252,229,201,1],[-0.2841,0.1189,255,211,205,1],[-0.2577,0.1189,255,224,201,1],[-0.2313,0.1189,250,240,204,1],[-0.2048,0.1189,251,239,202,1],[-0.1784,0.1189,251,239,202,1],[-0.152,0.1189,251,239,202,1],[-0.1256,0.1189,250,240,200,1],[-0.0991,0.1189,251,239,202,1],[-0.0727,0.1189,250,239,208,1],[-0.0198,0.1189,247,245,186,1],[0.033,0.1189,249,242,204,1],[0.0595,0.1189,251,239,202,1],[0.0859,0.1189,253,240,204,1],[0.1123,0.1189,251,239,202,1],[0.1388,0.1189,251,239,202,1],[0.1652,0.1189,251,239,202,1],[0.1916,0.1189,250,238,201,1],[0.2048,0.1189,175,129,135,1],[0.2313,0.1189,254,201,210,1],[0.2445,0.1189,255,195,206,1],[0.2577,0.1189,116,94,92,1],[0.2841,0.1189,254,205,212,1],[0.2974,0.1189,252,191,203,1],[0.3238,0.1189,165,130,133,1],[0.337,0.1189,255,201,213,1],[0.3767,0.1189,255,237,204,1],[0.4031,0.1189,250,238,201,1],[0.4295,0.1189,251,239,202,1],[0.4559,0.1189,253,241,202,1],[0.4824,0.1189,249,236,206,1],[0.2048,0.1322,247,203,208,1],[0.2181,0.1322,255,195,208,1],[0.2313,0.1322,255,192,207,1],[0.2445,0.1322,255,192,202,1],[0.2577,0.1322,240,196,199,1],[0.2841,0.1322,255,197,206,1],[0.2974,0.1322,253,193,202,1],[0.3106,0.1322,252,184,196,1],[0.3238,0.1322,255,193,204,1],[0.337,0.1322,255,194,204,1],[0.3502,0.1322,230,178,188,1],[0.3634,0.1322,251,206,203,1],[-0.4692,0.1454,251,240,200,1],[-0.4427,0.1454,251,239,202,1],[-0.4163,0.1454,251,239,202,1],[-0.3899,0.1454,251,239,202,1],[-0.3634,0.1454,254,240,204,1],[-0.337,0.1454,253,240,204,1],[-0.3106,0.1454,251,239,202,1],[-0.2841,0.1454,251,239,202,1],[-0.2577,0.1454,250,240,202,1],[-0.2313,0.1454,250,240,202,1],[-0.2048,0.1454,250,240,202,1],[-0.1784,0.1454,250,240,202,1],[-0.152,0.1454,251,239,202,1],[-0.1256,0.1454,251,239,202,1],[-0.0991,0.1454,251,239,202,1],[-0.0727,0.1454,251,239,202,1],[0.0859,0.1454,251,241,204,1],[0.1123,0.1454,251,239,202,1],[0.1388,0.1454,251,239,202,1],[0.1652,0.1454,251,239,202,1],[0.1916,0.1454,253,238,204,1],[0.2181,0.1454,245,202,200,1],[0.2313,0.1454,251,198,202,1],[0.2445,0.1454,255,194,201,1],[0.2577,0.1454,255,195,202,1],[0.2709,0.1454,255,194,201,1],[0.2841,0.1454,255,193,201,1],[0.2974,0.1454,255,194,201,1],[0.3106,0.1454,255,194,201,1],[0.3238,0.1454,255,195,202,1],[0.337,0.1454,255,193,203,1],[0.3502,0.1454,252,199,203,1],[0.3767,0.1454,251,239,202,1],[0.4031,0.1454,251,239,202,1],[0.4295,0.1454,251,239,202,1],[0.4559,0.1454,253,240,204,1],[0.4824,0.1454,196,194,181,1],[0.2313,0.1586,246,201,198,1],[0.2445,0.1586,251,191,195,1],[0.2577,0.1586,255,195,199,1],[0.2709,0.1586,255,195,199,1],[0.2841,0.1586,253,196,199,1],[0.2974,0.1586,253,196,199,1],[0.3106,0.1586,250,197,199,1],[0.3238,0.1586,250,197,199,1],[0.337,0.1586,243,198,193,1],[-0.4692,0.1718,251,240,200,1],[-0.4427,0.1718,251,239,202,1],[-0.4163,0.1718,251,239,202,1],[-0.3899,0.1718,251,239,202,1],[-0.3634,0.1718,253,240,204,1],[-0.337,0.1718,253,240,204,1],[-0.3106,0.1718,253,240,204,1],[-0.2841,0.1718,253,240,204,1],[-0.2577,0.1718,251,241,204,1],[-0.2313,0.1718,251,241,204,1],[-0.2048,0.1718,251,241,204,1],[-0.1784,0.1718,250,240,202,1],[-0.152,0.1718,251,239,202,1],[-0.1256,0.1718,253,238,202,1],[-0.0991,0.1718,251,239,202,1],[-0.0727,0.1718,251,239,202,1],[-0.0463,0.1718,253,240,204,1],[-0.0198,0.1718,254,240,204,1],[0.0066,0.1718,232,221,202,1],[0.0595,0.1718,248,243,202,1],[0.0859,0.1718,250,240,202,1],[0.1123,0.1718,251,239,202,1],[0.1388,0.1718,251,239,202,1],[0.1652,0.1718,251,239,202,1],[0.1916,0.1718,250,240,200,1],[0.2181,0.1718,255,237,206,1],[0.2445,0.1718,255,215,209,1],[0.2577,0.1718,251,201,195,1],[0.2709,0.1718,250,198,193,1],[0.2841,0.1718,250,198,193,1],[0.2974,0.1718,248,199,193,1],[0.3238,0.1718,248,213,202,1],[0.3502,0.1718,253,239,198,1],[0.3767,0.1718,253,238,202,1],[0.4031,0.1718,251,239,202,1],[0.4295,0.1718,251,239,202,1],[0.4559,0.1718,253,241,202,1],[-0.4692,0.1982,244,235,204,1],[-0.4427,0.1982,251,239,202,1],[-0.4163,0.1982,251,239,202,1],[-0.3899,0.1982,251,239,202,1],[-0.3634,0.1982,251,239,202,1],[-0.337,0.1982,251,239,202,1],[-0.3106,0.1982,251,239,202,1],[-0.2841,0.1982,251,239,202,1],[-0.2577,0.1982,251,239,202,1],[-0.2313,0.1982,251,239,202,1],[-0.2048,0.1982,251,239,202,1],[-0.1784,0.1982,251,239,202,1],[-0.152,0.1982,251,239,202,1],[-0.1256,0.1982,251,239,202,1],[-0.0991,0.1982,251,239,202,1],[-0.0727,0.1982,251,239,202,1],[-0.0463,0.1982,253,240,204,1],[-0.0198,0.1982,248,238,200,1],[0.0066,0.1982,236,229,202,1],[0.033,0.1982,247,240,201,1],[0.0595,0.1982,251,240,200,1],[0.0859,0.1982,253,238,202,1],[0.1123,0.1982,251,239,202,1],[0.1388,0.1982,251,239,202,1],[0.1652,0.1982,251,239,202,1],[0.1916,0.1982,251,239,202,1],[0.2181,0.1982,251,239,202,1],[0.2445,0.1982,251,239,202,1],[0.2709,0.1982,249,239,201,1],[0.2974,0.1982,250,238,201,1],[0.3238,0.1982,250,238,201,1],[0.3502,0.1982,251,239,202,1],[0.3767,0.1982,251,239,202,1],[0.4031,0.1982,251,239,202,1],[0.4295,0.1982,251,239,202,1],[0.4559,0.1982,251,242,200,1],[-0.4427,0.2247,250,240,204,1],[-0.4163,0.2247,251,239,202,1],[-0.3899,0.2247,251,239,202,1],[-0.3634,0.2247,251,239,202,1],[-0.337,0.2247,251,239,202,1],[-0.3106,0.2247,251,239,202,1],[-0.2841,0.2247,251,239,202,1],[-0.2577,0.2247,251,239,202,1],[-0.2313,0.2247,251,239,202,1],[-0.2048,0.2247,251,239,202,1],[-0.1784,0.2247,251,239,202,1],[-0.152,0.2247,251,239,202,1],[-0.1256,0.2247,251,239,202,1],[-0.0991,0.2247,251,239,202,1],[-0.0727,0.2247,251,239,202,1],[-0.0463,0.2247,253,240,204,1],[-0.0198,0.2247,253,240,204,1],[0.0066,0.2247,251,239,202,1],[0.033,0.2247,253,239,200,1],[0.0595,0.2247,251,239,202,1],[0.0859,0.2247,250,240,204,1],[0.1123,0.2247,251,239,202,1],[0.1388,0.2247,251,239,202,1],[0.1652,0.2247,251,239,202,1],[0.1916,0.2247,251,239,202,1],[0.2181,0.2247,251,239,202,1],[0.2445,0.2247,251,239,202,1],[0.2709,0.2247,251,239,202,1],[0.2974,0.2247,251,239,202,1],[0.3238,0.2247,251,239,202,1],[0.3502,0.2247,251,239,202,1],[0.3767,0.2247,251,239,202,1],[0.4031,0.2247,251,239,202,1],[0.4295,0.2247,251,239,202,1],[0.4559,0.2247,239,235,207,1],[-0.4163,0.2511,250,240,202,1],[-0.3899,0.2511,251,239,202,1],[-0.3634,0.2511,251,239,202,1],[-0.337,0.2511,251,239,202,1],[-0.3106,0.2511,251,239,202,1],[-0.2841,0.2511,251,239,202,1],[-0.2577,0.2511,251,239,202,1],[-0.2313,0.2511,251,239,202,1],[-0.2048,0.2511,251,239,202,1],[-0.1784,0.2511,251,239,202,1],[-0.152,0.2511,251,239,202,1],[-0.1256,0.2511,251,239,202,1],[-0.0991,0.2511,251,239,202,1],[-0.0727,0.2511,251,239,202,1],[-0.0463,0.2511,251,239,202,1],[-0.0198,0.2511,251,239,202,1],[0.0066,0.2511,251,239,202,1],[0.033,0.2511,251,239,202,1],[0.0595,0.2511,251,239,202,1],[0.0859,0.2511,251,239,202,1],[0.1123,0.2511,251,239,202,1],[0.1388,0.2511,251,239,202,1],[0.1652,0.2511,251,239,202,1],[0.1916,0.2511,251,239,202,1],[0.2181,0.2511,251,239,202,1],[0.2445,0.2511,251,239,202,1],[0.2709,0.2511,251,239,202,1],[0.2974,0.2511,251,239,202,1],[0.3238,0.2511,251,239,202,1],[0.3502,0.2511,251,239,202,1],[0.3767,0.2511,251,239,202,1],[0.4031,0.2511,251,239,202,1],[0.4295,0.2511,255,244,205,1],[-0.3899,0.2775,249,242,206,1],[-0.3634,0.2775,253,240,204,1],[-0.337,0.2775,253,240,204,1],[-0.3106,0.2775,251,239,202,1],[-0.2841,0.2775,251,239,202,1],[-0.2577,0.2775,251,239,202,1],[-0.2313,0.2775,251,239,202,1],[-0.2048,0.2775,251,239,202,1],[-0.1784,0.2775,251,239,202,1],[-0.152,0.2775,251,239,202,1],[-0.1256,0.2775,251,239,202,1],[-0.0991,0.2775,251,239,202,1],[-0.0727,0.2775,251,239,202,1],[-0.0463,0.2775,251,239,202,1],[-0.0198,0.2775,251,239,202,1],[0.0066,0.2775,251,239,202,1],[0.033,0.2775,251,239,202,1],[0.0595,0.2775,251,239,202,1],[0.0859,0.2775,251,239,202,1],[0.1123,0.2775,251,239,202,1],[0.1388,0.2775,251,239,202,1],[0.1652,0.2775,251,239,202,1],[0.1916,0.2775,251,239,202,1],[0.2181,0.2775,251,239,202,1],[0.2445,0.2775,251,239,202,1],[0.2709,0.2775,251,239,202,1],[0.2974,0.2775,251,239,202,1],[0.3238,0.2775,251,239,202,1],[0.3502,0.2775,251,239,202,1],[0.3767,0.2775,251,239,202,1],[0.4031,0.2775,251,239,202,1],[0.4295,0.2775,227,216,200,1],[-0.3899,0.304,250,238,203,1],[-0.3634,0.304,253,241,202,1],[-0.337,0.304,253,240,204,1],[-0.3106,0.304,251,239,202,1],[-0.2841,0.304,251,239,202,1],[-0.2577,0.304,251,239,202,1],[-0.2313,0.304,251,239,202,1],[-0.2048,0.304,251,239,202,1],[-0.1784,0.304,251,239,202,1],[-0.152,0.304,251,239,202,1],[-0.1256,0.304,251,239,202,1],[-0.0991,0.304,251,239,202,1],[-0.0727,0.304,251,239,202,1],[-0.0463,0.304,251,239,202,1],[-0.0198,0.304,251,239,202,1],[0.0066,0.304,251,239,202,1],[0.033,0.304,251,239,202,1],[0.0595,0.304,251,239,202,1],[0.0859,0.304,251,239,202,1],[0.1123,0.304,251,239,202,1],[0.1388,0.304,251,239,202,1],[0.1652,0.304,251,239,202,1],[0.1916,0.304,251,239,202,1],[0.2181,0.304,251,239,202,1],[0.2445,0.304,251,239,202,1],[0.2709,0.304,251,239,202,1],[0.2974,0.304,251,239,202,1],[0.3238,0.304,251,239,202,1],[0.3502,0.304,251,239,202,1],[0.3767,0.304,251,239,202,1],[0.4031,0.304,254,242,205,1],[-0.4427,0.3304,248,250,210,1],[-0.4163,0.3304,248,238,200,1],[-0.3899,0.3304,251,241,206,1],[-0.3634,0.3304,253,240,204,1],[-0.337,0.3304,253,240,204,1],[-0.3106,0.3304,251,239,202,1],[-0.2841,0.3304,251,239,202,1],[-0.2577,0.3304,251,239,202,1],[-0.2313,0.3304,251,239,202,1],[-0.2048,0.3304,251,239,202,1],[-0.1784,0.3304,251,239,202,1],[-0.152,0.3304,251,239,202,1],[-0.1256,0.3304,251,239,202,1],[-0.0991,0.3304,251,239,202,1],[-0.0727,0.3304,251,239,202,1],[-0.0463,0.3304,251,239,202,1],[-0.0198,0.3304,251,239,202,1],[0.0066,0.3304,251,239,202,1],[0.033,0.3304,251,239,202,1],[0.0595,0.3304,251,239,202,1],[0.0859,0.3304,251,239,202,1],[0.1123,0.3304,251,239,202,1],[0.1388,0.3304,251,239,202,1],[0.1652,0.3304,251,239,202,1],[0.1916,0.3304,251,239,202,1],[0.2181,0.3304,251,239,202,1],[0.2445,0.3304,251,239,202,1],[0.2709,0.3304,251,239,202,1],[0.2974,0.3304,251,239,202,1],[0.3238,0.3304,251,239,202,1],[0.3502,0.3304,251,239,202,1],[0.3767,0.3304,251,239,202,1],[-0.4692,0.3568,248,241,214,1],[-0.4427,0.3568,253,238,204,1],[-0.3899,0.3568,244,240,207,1],[-0.3634,0.3568,253,241,202,1],[-0.337,0.3568,253,240,204,1],[-0.3106,0.3568,251,239,202,1],[-0.2841,0.3568,251,239,202,1],[-0.2577,0.3568,251,239,202,1],[-0.2313,0.3568,251,239,202,1],[-0.2048,0.3568,251,239,202,1],[-0.1784,0.3568,251,239,202,1],[-0.152,0.3568,251,239,202,1],[-0.1256,0.3568,251,239,202,1],[-0.0991,0.3568,251,239,202,1],[-0.0727,0.3568,251,239,202,1],[-0.0463,0.3568,251,239,202,1],[-0.0198,0.3568,251,239,202,1],[0.0066,0.3568,251,239,202,1],[0.033,0.3568,251,239,202,1],[0.0595,0.3568,251,239,202,1],[0.0859,0.3568,251,239,202,1],[0.1123,0.3568,251,239,202,1],[0.1388,0.3568,251,239,202,1],[0.1652,0.3568,251,239,202,1],[0.1916,0.3568,251,239,202,1],[0.2181,0.3568,251,239,202,1],[0.2445,0.3568,251,239,202,1],[0.2709,0.3568,251,239,202,1],[0.2974,0.3568,251,239,202,1],[0.3238,0.3568,251,239,204,1],[0.3502,0.3568,251,238,206,1],[-0.4427,0.3833,247,240,212,1],[-0.3899,0.3833,226,228,202,1],[-0.3634,0.3833,253,240,204,1],[-0.337,0.3833,253,240,204,1],[-0.3106,0.3833,251,239,202,1],[-0.2841,0.3833,251,239,202,1],[-0.2577,0.3833,251,239,202,1],[-0.2313,0.3833,251,239,202,1],[-0.2048,0.3833,251,239,202,1],[-0.1784,0.3833,251,239,202,1],[-0.152,0.3833,251,239,202,1],[-0.1256,0.3833,251,239,202,1],[-0.0991,0.3833,251,239,202,1],[-0.0727,0.3833,251,239,202,1],[-0.0463,0.3833,251,239,202,1],[-0.0198,0.3833,251,239,202,1],[0.0066,0.3833,251,239,202,1],[0.033,0.3833,251,239,202,1],[0.0595,0.3833,251,239,202,1],[0.0859,0.3833,251,239,202,1],[0.1123,0.3833,251,239,202,1],[0.1388,0.3833,251,239,202,1],[0.1652,0.3833,251,239,202,1],[0.1916,0.3833,251,239,202,1],[0.2181,0.3833,251,239,202,1],[0.2445,0.3833,251,239,202,1],[0.2709,0.3833,251,239,202,1],[0.2974,0.3833,251,239,202,1],[0.3238,0.3833,247,235,198,1],[-0.3634,0.4097,251,239,202,1],[-0.337,0.4097,253,240,204,1],[-0.3106,0.4097,251,239,202,1],[-0.2841,0.4097,251,239,202,1],[-0.2577,0.4097,251,239,202,1],[-0.2313,0.4097,251,239,202,1],[-0.2048,0.4097,251,239,202,1],[-0.1784,0.4097,251,239,202,1],[-0.152,0.4097,251,239,202,1],[-0.1256,0.4097,251,239,202,1],[-0.0991,0.4097,251,239,202,1],[-0.0727,0.4097,251,239,202,1],[-0.0463,0.4097,251,239,202,1],[-0.0198,0.4097,251,239,202,1],[0.0066,0.4097,251,239,202,1],[0.033,0.4097,251,239,202,1],[0.0595,0.4097,251,239,202,1],[0.0859,0.4097,251,239,202,1],[0.1123,0.4097,251,239,202,1],[0.1388,0.4097,251,239,202,1],[0.1652,0.4097,251,239,202,1],[0.1916,0.4097,251,239,202,1],[0.2181,0.4097,251,239,202,1],[0.2445,0.4097,251,239,202,1],[0.2709,0.4097,251,239,202,1],[0.2974,0.4097,251,239,202,1],[0.3238,0.4097,251,239,202,1],[0.3502,0.4097,245,241,210,1],[-0.3634,0.4361,251,239,204,1],[-0.337,0.4361,253,240,204,1],[-0.3106,0.4361,251,239,202,1],[-0.2841,0.4361,251,239,202,1],[-0.2577,0.4361,251,239,202,1],[-0.2313,0.4361,251,239,202,1],[-0.2048,0.4361,251,239,202,1],[-0.1784,0.4361,251,239,202,1],[-0.152,0.4361,251,239,202,1],[-0.1256,0.4361,251,239,202,1],[-0.0991,0.4361,251,239,202,1],[-0.0727,0.4361,251,239,202,1],[-0.0463,0.4361,251,239,202,1],[-0.0198,0.4361,251,239,202,1],[0.0066,0.4361,251,239,202,1],[0.033,0.4361,251,239,202,1],[0.0595,0.4361,251,239,202,1],[0.0859,0.4361,251,239,202,1],[0.1123,0.4361,251,239,202,1],[0.1388,0.4361,251,239,202,1],[0.1652,0.4361,251,239,202,1],[0.1916,0.4361,251,239,202,1],[0.2181,0.4361,251,239,202,1],[0.2445,0.4361,251,239,202,1],[0.2709,0.4361,251,239,202,1],[0.2974,0.4361,251,239,202,1],[0.3502,0.4361,253,240,204,1],[-0.3634,0.4626,251,239,204,1],[-0.337,0.4626,251,239,202,1],[-0.3106,0.4626,251,239,202,1],[-0.2841,0.4626,251,239,202,1],[-0.2577,0.4626,251,239,202,1],[-0.2313,0.4626,251,239,202,1],[-0.2048,0.4626,251,239,202,1],[-0.1784,0.4626,251,239,202,1],[-0.152,0.4626,251,239,202,1],[-0.1256,0.4626,251,239,202,1],[-0.0991,0.4626,251,239,202,1],[-0.0727,0.4626,251,239,202,1],[-0.0463,0.4626,251,239,202,1],[-0.0198,0.4626,251,239,202,1],[0.0066,0.4626,251,239,202,1],[0.033,0.4626,251,239,202,1],[0.0595,0.4626,251,239,202,1],[0.0859,0.4626,251,239,202,1],[0.1123,0.4626,251,239,202,1],[0.1388,0.4626,251,239,202,1],[0.1652,0.4626,251,239,202,1],[0.1916,0.4626,251,239,202,1],[0.2181,0.4626,251,239,202,1],[0.2445,0.4626,251,239,202,1],[0.2709,0.4626,251,239,202,1],[0.3502,0.4626,250,238,203,1],[-0.3634,0.489,251,239,204,1],[-0.337,0.489,251,239,202,1],[-0.3106,0.489,251,239,202,1],[-0.2841,0.489,251,239,202,1],[-0.2577,0.489,251,239,202,1],[-0.2313,0.489,251,239,202,1],[-0.2048,0.489,251,239,202,1],[-0.1784,0.489,251,239,202,1],[-0.152,0.489,251,239,202,1],[-0.1256,0.489,251,239,202,1],[-0.0991,0.489,251,239,202,1],[-0.0727,0.489,251,239,202,1],[-0.0463,0.489,251,239,202,1],[-0.0198,0.489,251,239,202,1],[0.0066,0.489,251,239,202,1],[0.033,0.489,251,239,202,1],[0.0595,0.489,251,239,202,1],[0.0859,0.489,251,239,202,1],[0.1123,0.489,251,239,202,1],[0.1388,0.489,251,239,202,1],[0.1652,0.489,251,239,202,1],[0.1916,0.489,251,239,202,1],[0.2181,0.489,251,239,202,1],[0.2445,0.489,251,239,202,1],[0.2709,0.489,251,240,200,1],[-0.3634,0.5154,251,241,206,1],[-0.337,0.5154,250,240,202,1],[-0.3106,0.5154,251,239,202,1],[-0.2841,0.5154,251,239,202,1],[-0.2577,0.5154,251,239,202,1],[-0.2313,0.5154,251,239,202,1],[-0.2048,0.5154,251,239,202,1],[-0.1784,0.5154,251,239,202,1],[-0.152,0.5154,251,239,202,1],[-0.1256,0.5154,251,239,202,1],[-0.0991,0.5154,251,239,202,1],[-0.0727,0.5154,251,239,202,1],[-0.0463,0.5154,251,239,202,1],[-0.0198,0.5154,251,239,202,1],[0.0066,0.5154,251,239,202,1],[0.033,0.5154,251,239,202,1],[0.0595,0.5154,251,239,202,1],[0.0859,0.5154,251,239,202,1],[0.1123,0.5154,251,239,202,1],[0.1388,0.5154,251,239,202,1],[0.1652,0.5154,251,239,202,1],[0.1916,0.5154,251,239,202,1],[0.2181,0.5154,251,239,202,1],[0.2445,0.5154,251,239,202,1],[0.2709,0.5154,246,237,197,1],[-0.337,0.5419,249,239,201,1],[-0.3106,0.5419,251,239,202,1],[-0.2841,0.5419,251,239,202,1],[-0.2577,0.5419,251,239,202,1],[-0.2313,0.5419,251,239,202,1],[-0.2048,0.5419,251,239,202,1],[-0.1784,0.5419,251,239,202,1],[-0.152,0.5419,251,239,202,1],[-0.1256,0.5419,251,239,202,1],[-0.0991,0.5419,251,239,202,1],[-0.0727,0.5419,251,239,202,1],[-0.0463,0.5419,251,239,202,1],[-0.0198,0.5419,251,239,202,1],[0.0066,0.5419,251,239,202,1],[0.033,0.5419,251,239,202,1],[0.0595,0.5419,251,239,202,1],[0.0859,0.5419,251,239,202,1],[0.1123,0.5419,251,239,202,1],[0.1388,0.5419,251,239,202,1],[0.1652,0.5419,251,239,202,1],[0.1916,0.5419,251,239,202,1],[0.2181,0.5419,251,239,202,1],[0.2445,0.5419,251,239,202,1],[0.2709,0.5419,252,243,203,1],[-0.337,0.5683,247,244,211,1],[-0.3106,0.5683,250,240,202,1],[-0.2841,0.5683,251,239,202,1],[-0.2577,0.5683,251,239,202,1],[-0.2313,0.5683,251,239,202,1],[-0.2048,0.5683,251,239,202,1],[-0.1784,0.5683,251,239,202,1],[-0.152,0.5683,251,239,202,1],[-0.1256,0.5683,251,239,202,1],[-0.0991,0.5683,251,239,202,1],[-0.0727,0.5683,251,239,202,1],[-0.0463,0.5683,251,239,202,1],[-0.0198,0.5683,251,239,202,1],[0.0066,0.5683,251,239,202,1],[0.033,0.5683,251,239,202,1],[0.0595,0.5683,251,239,202,1],[0.0859,0.5683,251,239,202,1],[0.1123,0.5683,251,239,202,1],[0.1388,0.5683,251,239,202,1],[0.1652,0.5683,251,239,202,1],[0.1916,0.5683,251,239,202,1],[0.2181,0.5683,251,239,202,1],[0.2445,0.5683,251,239,202,1],[0.2709,0.5683,238,239,205,1],[-0.3106,0.5947,248,240,204,1],[-0.2841,0.5947,250,240,202,1],[-0.2577,0.5947,251,239,202,1],[-0.2313,0.5947,251,239,202,1],[-0.2048,0.5947,251,239,202,1],[-0.1784,0.5947,251,239,202,1],[-0.152,0.5947,251,239,202,1],[-0.1256,0.5947,251,239,202,1],[-0.0991,0.5947,251,239,202,1],[-0.0727,0.5947,251,239,202,1],[-0.0463,0.5947,251,239,202,1],[-0.0198,0.5947,251,239,202,1],[0.0066,0.5947,251,239,202,1],[0.033,0.5947,251,239,202,1],[0.0595,0.5947,251,239,202,1],[0.0859,0.5947,251,239,202,1],[0.1123,0.5947,251,239,202,1],[0.1388,0.5947,251,239,202,1],[0.1652,0.5947,251,239,202,1],[0.1916,0.5947,251,239,202,1],[0.2181,0.5947,251,239,202,1],[0.2445,0.5947,251,240,198,1],[-0.2841,0.6211,255,247,211,1],[-0.2577,0.6211,251,241,204,1],[-0.2313,0.6211,253,240,206,1],[-0.2048,0.6211,253,240,204,1],[-0.1784,0.6211,251,239,202,1],[-0.152,0.6211,251,239,202,1],[-0.1256,0.6211,251,239,202,1],[-0.0991,0.6211,251,239,202,1],[-0.0727,0.6211,251,239,202,1],[-0.0463,0.6211,251,239,202,1],[-0.0198,0.6211,251,239,202,1],[0.0066,0.6211,251,239,202,1],[0.033,0.6211,251,239,202,1],[0.0595,0.6211,251,239,202,1],[0.0859,0.6211,251,239,202,1],[0.1123,0.6211,251,239,202,1],[0.1388,0.6211,251,239,202,1],[0.1652,0.6211,251,239,202,1],[0.1916,0.6211,251,239,202,1],[0.2181,0.6211,251,239,202,1],[0.2445,0.6211,250,239,206,1],[-0.2577,0.6476,214,206,184,1],[-0.2313,0.6476,249,241,208,1],[-0.2048,0.6476,253,240,204,1],[-0.1784,0.6476,251,239,202,1],[-0.152,0.6476,251,239,202,1],[-0.1256,0.6476,251,239,202,1],[-0.0991,0.6476,251,239,202,1],[-0.0727,0.6476,251,239,202,1],[-0.0463,0.6476,251,239,202,1],[-0.0198,0.6476,251,239,202,1],[0.0066,0.6476,251,239,202,1],[0.033,0.6476,251,239,202,1],[0.0595,0.6476,251,239,202,1],[0.0859,0.6476,251,239,202,1],[0.1123,0.6476,251,239,202,1],[0.1388,0.6476,251,239,202,1],[0.1652,0.6476,251,239,202,1],[0.1916,0.6476,251,239,202,1],[0.2181,0.6476,251,239,202,1],[0.2445,0.6476,169,160,143,1],[-0.2313,0.674,209,204,167,1],[-0.2048,0.674,253,238,202,1],[-0.1784,0.674,251,240,200,1],[-0.152,0.674,252,237,203,1],[-0.1256,0.674,253,239,200,1],[-0.0991,0.674,251,239,202,1],[-0.0727,0.674,251,239,202,1],[-0.0463,0.674,251,239,202,1],[-0.0198,0.674,251,239,202,1],[0.0066,0.674,251,239,202,1],[0.033,0.674,251,239,202,1],[0.0595,0.674,251,239,202,1],[0.0859,0.674,251,239,202,1],[0.1123,0.674,251,239,202,1],[0.1388,0.674,251,239,202,1],[0.1652,0.674,251,239,202,1],[0.1916,0.674,251,239,202,1],[0.2181,0.674,248,241,202,1],[-0.2313,0.7004,250,239,206,1],[-0.2048,0.7004,250,240,202,1],[-0.0991,0.7004,248,239,210,1],[-0.0727,0.7004,251,239,204,1],[-0.0463,0.7004,253,238,202,1],[-0.0198,0.7004,251,239,202,1],[0.0066,0.7004,251,239,202,1],[0.033,0.7004,251,240,200,1],[0.0595,0.7004,251,239,202,1],[0.0859,0.7004,251,239,202,1],[0.1123,0.7004,251,239,204,1],[0.1388,0.7004,251,239,204,1],[0.1652,0.7004,251,242,211,1],[0.1916,0.7004,249,240,212,1],[0.2181,0.7004,253,238,204,1],[0.2445,0.7004,253,239,198,1],[0.2709,0.7004,237,231,210,1],[-0.2313,0.7269,246,236,203,1],[-0.2048,0.7269,251,239,202,1],[0.0066,0.7269,239,232,202,1],[0.033,0.7269,248,242,210,1],[0.0595,0.7269,186,179,154,1],[0.2445,0.7269,162,158,139,1],[0.2709,0.7269,228,220,198,1],[-0.2048,0.7533,188,184,163,1],[0.033,-0.5683,19,20,29,2],[0.0463,-0.5683,19,20,29,2],[0.033,-0.5551,19,20,29,2],[0.0463,-0.5551,19,20,29,2],[0.033,-0.5419,19,20,29,2],[0.0463,-0.5419,19,20,29,2],[0.033,-0.5286,19,20,29,2],[0.0463,-0.5286,19,20,29,2],[0.033,-0.5154,19,20,29,2],[0.0463,-0.5154,19,20,29,2],[0.033,-0.5022,19,20,29,2],[0.0463,-0.5022,19,20,29,2],[0.033,-0.489,19,20,29,2],[0.0463,-0.489,19,20,29,2],[0.033,-0.4758,19,20,29,2],[0.0463,-0.4758,19,20,29,2],[0.033,-0.4626,19,20,29,2],[0.0463,-0.4626,19,20,29,2],[0.033,-0.4493,19,20,29,2],[0.0463,-0.4493,19,20,29,2],[0.033,-0.4361,19,20,29,2],[0.0463,-0.4361,19,20,29,2],[0.033,-0.4229,19,20,29,2],[0.0463,-0.4229,19,20,29,2],[0.033,-0.4097,19,20,29,2],[0.0463,-0.4097,19,20,29,2],[0.033,-0.3965,19,20,29,2],[0.0463,-0.3965,19,20,29,2],[0.0198,-0.3833,19,20,29,2],[0.033,-0.3833,19,20,29,2],[-0.0991,-0.37,19,20,29,2],[-0.0595,-0.37,19,20,29,2],[0.0198,-0.37,19,20,29,2],[0.033,-0.37,19,20,29,2],[0.1388,-0.37,19,20,29,2],[-0.0595,-0.3568,19,20,29,2],[0.0066,-0.3568,19,20,29,2],[0.0198,-0.3568,19,20,29,2],[0.033,-0.3568,19,20,29,2],[0.1388,-0.3568,19,20,29,2],[0.152,-0.3568,19,20,29,2],[0.0066,-0.3436,19,20,29,2],[0.0198,-0.3436,19,20,29,2],[0.033,-0.3436,19,20,29,2],[0.0463,-0.3436,19,20,29,2],[0.1388,-0.3436,19,20,29,2],[0.1784,-0.3304,19,20,29,2],[-0.1256,-0.2643,19,20,29,2],[-0.1123,-0.2643,19,20,29,2],[-0.0991,-0.2643,19,20,29,2],[-0.0859,-0.2643,19,20,29,2],[0.3502,-0.2643,19,20,29,2],[-0.1652,-0.2511,19,20,29,2],[-0.152,-0.2511,19,20,29,2],[-0.1388,-0.2511,19,20,29,2],[-0.1256,-0.2511,19,20,29,2],[-0.1123,-0.2511,19,20,29,2],[-0.0991,-0.2511,19,20,29,2],[-0.0859,-0.2511,19,20,29,2],[-0.0727,-0.2511,19,20,29,2],[-0.4163,-0.2379,19,20,29,2],[-0.1784,-0.2379,19,20,29,2],[-0.1652,-0.2379,19,20,29,2],[-0.152,-0.2379,19,20,29,2],[-0.0859,-0.2379,19,20,29,2],[0.1784,-0.2379,19,20,29,2],[-0.2048,-0.2247,19,20,29,2],[-0.1916,-0.2247,19,20,29,2],[-0.1784,-0.2247,19,20,29,2],[0.1388,-0.2247,19,20,29,2],[0.152,-0.2247,19,20,29,2],[0.1652,-0.2247,19,20,29,2],[0.1784,-0.2247,19,20,29,2],[0.1916,-0.2247,19,20,29,2],[0.2048,-0.2247,19,20,29,2],[0.2181,-0.2247,19,20,29,2],[-0.2181,-0.2115,19,20,29,2],[-0.2048,-0.2115,19,20,29,2],[-0.1916,-0.2115,19,20,29,2],[0.2048,-0.2115,19,20,29,2],[0.2181,-0.2115,19,20,29,2],[0.2313,-0.2115,19,20,29,2],[0.2445,-0.2115,19,20,29,2],[-0.2181,-0.1982,19,20,29,2],[-0.2048,-0.1982,19,20,29,2],[0.2313,-0.1982,19,20,29,2],[0.2445,-0.1982,19,20,29,2],[0.2577,-0.1982,19,20,29,2],[-0.2313,-0.185,19,20,29,2],[-0.2181,-0.185,19,20,29,2],[0.2445,-0.185,19,20,29,2],[0.2577,-0.185,19,20,29,2],[0.2709,-0.185,19,20,29,2],[-0.2313,-0.1718,19,20,29,2],[0.2577,-0.1718,19,20,29,2],[0.2709,-0.1718,19,20,29,2],[0.2841,-0.1718,19,20,29,2],[-0.2445,-0.1586,19,20,29,2],[-0.2313,-0.1586,19,20,29,2],[0.2709,-0.1586,19,20,29,2],[0.2841,-0.1586,19,20,29,2],[0.2974,-0.1586,19,20,29,2],[-0.2445,-0.1454,19,20,29,2],[-0.2313,-0.1454,19,20,29,2],[0.2841,-0.1454,19,20,29,2],[0.2974,-0.1454,19,20,29,2],[-0.2445,-0.1322,19,20,29,2],[0.2841,-0.1322,19,20,29,2],[0.2974,-0.1322,19,20,29,2],[0.3106,-0.1322,19,20,29,2],[-0.2445,-0.1189,19,20,29,2],[0.2974,-0.1189,19,20,29,2],[0.3106,-0.1189,19,20,29,2],[0.2974,-0.1057,19,20,29,2],[0.3106,-0.1057,19,20,29,2],[0.3106,-0.0925,19,20,29,2],[0.3238,-0.0925,19,20,29,2],[0.3106,-0.0793,19,20,29,2],[0.3238,-0.0793,19,20,29,2],[0.3106,-0.0661,19,20,29,2],[0.3238,-0.0661,19,20,29,2],[-0.1916,-0.0529,19,20,29,2],[-0.1784,-0.0529,19,20,29,2],[-0.1652,-0.0529,19,20,29,2],[-0.152,-0.0529,19,20,29,2],[-0.1388,-0.0529,19,20,29,2],[0.3106,-0.0529,19,20,29,2],[0.3238,-0.0529,19,20,29,2],[-0.2048,-0.0396,19,20,29,2],[-0.1916,-0.0396,19,20,29,2],[-0.1784,-0.0396,19,20,29,2],[-0.1652,-0.0396,19,20,29,2],[-0.152,-0.0396,19,20,29,2],[-0.1388,-0.0396,19,20,29,2],[-0.1256,-0.0396,19,20,29,2],[0.3106,-0.0396,19,20,29,2],[0.3238,-0.0396,19,20,29,2],[-0.2048,-0.0264,19,20,29,2],[-0.1916,-0.0264,19,20,29,2],[-0.1388,-0.0264,19,20,29,2],[-0.1256,-0.0264,19,20,29,2],[0.1388,-0.0264,19,20,29,2],[0.152,-0.0264,19,20,29,2],[0.1652,-0.0264,19,20,29,2],[0.1784,-0.0264,19,20,29,2],[0.3106,-0.0264,19,20,29,2],[0.3238,-0.0264,19,20,29,2],[-0.2181,-0.0132,19,20,29,2],[-0.2048,-0.0132,19,20,29,2],[-0.1916,-0.0132,19,20,29,2],[-0.152,-0.0132,19,20,29,2],[-0.1388,-0.0132,19,20,29,2],[-0.1256,-0.0132,19,20,29,2],[-0.1123,-0.0132,19,20,29,2],[0.1256,-0.0132,19,20,29,2],[0.1388,-0.0132,19,20,29,2],[0.152,-0.0132,19,20,29,2],[0.1652,-0.0132,19,20,29,2],[0.1784,-0.0132,19,20,29,2],[0.1916,-0.0132,19,20,29,2],[-0.2181,0.0,19,20,29,2],[-0.2048,0.0,19,20,29,2],[-0.1916,0.0,19,20,29,2],[-0.1784,0.0,19,20,29,2],[-0.1652,0.0,19,20,29,2],[-0.152,0.0,19,20,29,2],[-0.1388,0.0,19,20,29,2],[-0.1256,0.0,19,20,29,2],[-0.1123,0.0,19,20,29,2],[0.1123,0.0,19,20,29,2],[0.1256,0.0,19,20,29,2],[0.1388,0.0,19,20,29,2],[0.1784,0.0,19,20,29,2],[0.1916,0.0,19,20,29,2],[-0.337,0.0132,19,20,29,2],[-0.3238,0.0132,19,20,29,2],[-0.2048,0.0132,19,20,29,2],[-0.1916,0.0132,19,20,29,2],[-0.1784,0.0132,19,20,29,2],[-0.1652,0.0132,19,20,29,2],[-0.1388,0.0132,19,20,29,2],[-0.1256,0.0132,19,20,29,2],[0.1123,0.0132,19,20,29,2],[0.1256,0.0132,19,20,29,2],[0.1784,0.0132,19,20,29,2],[0.1916,0.0132,19,20,29,2],[0.2048,0.0132,19,20,29,2],[-0.3502,0.0264,19,20,29,2],[-0.337,0.0264,19,20,29,2],[-0.2974,0.0264,19,20,29,2],[-0.2841,0.0264,19,20,29,2],[-0.2048,0.0264,19,20,29,2],[-0.1916,0.0264,19,20,29,2],[-0.1784,0.0264,19,20,29,2],[-0.152,0.0264,19,20,29,2],[-0.1388,0.0264,19,20,29,2],[-0.1256,0.0264,19,20,29,2],[0.1123,0.0264,19,20,29,2],[0.1256,0.0264,19,20,29,2],[0.1388,0.0264,19,20,29,2],[0.152,0.0264,19,20,29,2],[0.1652,0.0264,19,20,29,2],[0.1784,0.0264,19,20,29,2],[0.1916,0.0264,19,20,29,2],[0.2048,0.0264,19,20,29,2],[-0.3634,0.0396,19,20,29,2],[-0.3502,0.0396,19,20,29,2],[-0.3106,0.0396,19,20,29,2],[-0.2974,0.0396,19,20,29,2],[-0.2577,0.0396,19,20,29,2],[-0.1916,0.0396,19,20,29,2],[-0.1784,0.0396,19,20,29,2],[-0.1652,0.0396,19,20,29,2],[-0.152,0.0396,19,20,29,2],[0.1123,0.0396,19,20,29,2],[0.1256,0.0396,19,20,29,2],[0.1388,0.0396,19,20,29,2],[0.152,0.0396,19,20,29,2],[0.1652,0.0396,19,20,29,2],[0.1784,0.0396,19,20,29,2],[0.1916,0.0396,19,20,29,2],[0.2048,0.0396,19,20,29,2],[-0.3106,0.0529,19,20,29,2],[-0.2709,0.0529,19,20,29,2],[-0.2577,0.0529,19,20,29,2],[-0.2313,0.0529,19,20,29,2],[0.1256,0.0529,19,20,29,2],[0.1388,0.0529,19,20,29,2],[0.1784,0.0529,19,20,29,2],[0.1916,0.0529,19,20,29,2],[-0.2709,0.0661,19,20,29,2],[-0.2313,0.0661,19,20,29,2],[0.1388,0.0661,19,20,29,2],[0.152,0.0661,19,20,29,2],[0.1652,0.0661,19,20,29,2],[0.1784,0.0661,19,20,29,2],[0.2445,0.0793,19,20,29,2],[0.2841,0.0793,19,20,29,2],[0.2313,0.0925,19,20,29,2],[0.2445,0.0925,19,20,29,2],[0.2841,0.0925,19,20,29,2],[0.3238,0.0925,19,20,29,2],[0.3634,0.0925,19,20,29,2],[-0.0066,0.1057,19,20,29,2],[0.0066,0.1057,19,20,29,2],[0.0198,0.1057,19,20,29,2],[0.2181,0.1057,19,20,29,2],[0.2313,0.1057,19,20,29,2],[0.2709,0.1057,19,20,29,2],[0.2841,0.1057,19,20,29,2],[0.3106,0.1057,19,20,29,2],[0.3238,0.1057,19,20,29,2],[0.3634,0.1057,19,20,29,2],[-0.0463,0.1189,19,20,29,2],[-0.0066,0.1189,19,20,29,2],[0.0066,0.1189,19,20,29,2],[0.2181,0.1189,19,20,29,2],[0.2709,0.1189,19,20,29,2],[0.3502,0.1189,19,20,29,2],[-0.0595,0.1322,19,20,29,2],[-0.0463,0.1322,19,20,29,2],[-0.033,0.1322,19,20,29,2],[-0.0198,0.1322,19,20,29,2],[-0.0066,0.1322,19,20,29,2],[0.0066,0.1322,19,20,29,2],[-0.0463,0.1454,19,20,29,2],[-0.033,0.1454,19,20,29,2],[-0.0198,0.1454,19,20,29,2],[-0.0066,0.1454,19,20,29,2],[0.0066,0.1454,19,20,29,2],[0.0198,0.1454,19,20,29,2],[0.033,0.1454,19,20,29,2],[0.0463,0.1454,19,20,29,2],[0.0595,0.1454,19,20,29,2],[0.0198,0.1586,19,20,29,2],[0.033,0.1586,19,20,29,2],[0.0463,0.1586,19,20,29,2],[0.4824,0.1586,19,20,29,2],[0.0198,0.1718,19,20,29,2],[0.033,0.1718,19,20,29,2],[-0.0066,0.185,19,20,29,2],[0.0066,0.185,19,20,29,2],[0.0198,0.185,19,20,29,2],[-0.4163,0.2775,19,20,29,2],[-0.4824,0.304,19,20,29,2],[-0.4692,0.3172,19,20,29,2],[-0.4824,0.3304,19,20,29,2],[-0.4692,0.3304,19,20,29,2],[-0.4824,0.3436,19,20,29,2],[-0.4163,0.3436,19,20,29,2],[-0.4163,0.3568,19,20,29,2],[-0.4031,0.3568,19,20,29,2],[-0.4163,0.37,19,20,29,2],[0.337,0.3833,19,20,29,2],[-0.3767,0.3965,19,20,29,2],[0.3502,0.3965,19,20,29,2],[-0.4031,0.4493,19,20,29,2],[0.3238,0.4493,19,20,29,2],[-0.4031,0.4626,19,20,29,2],[-0.3899,0.4626,19,20,29,2],[-0.3899,0.4758,19,20,29,2],[-0.4559,0.489,19,20,29,2],[-0.4427,0.489,19,20,29,2],[-0.4295,0.489,19,20,29,2],[-0.3899,0.489,19,20,29,2],[-0.3767,0.489,19,20,29,2],[-0.4163,0.5022,19,20,29,2],[-0.4031,0.5022,19,20,29,2],[-0.3899,0.5022,19,20,29,2],[-0.3767,0.5022,19,20,29,2],[-0.3899,0.5154,19,20,29,2],[-0.3767,0.5154,19,20,29,2],[-0.3899,0.5286,19,20,29,2],[-0.3767,0.5286,19,20,29,2],[-0.3767,0.5419,19,20,29,2],[-0.4559,0.5551,19,20,29,2],[-0.4427,0.5551,19,20,29,2],[-0.3767,0.5551,19,20,29,2],[-0.3634,0.5551,19,20,29,2],[-0.4824,0.5683,19,20,29,2],[-0.4692,0.5683,19,20,29,2],[-0.4559,0.5683,19,20,29,2],[-0.3634,0.5683,19,20,29,2],[-0.3502,0.5683,19,20,29,2],[-0.3634,0.5815,19,20,29,2],[-0.3502,0.5815,19,20,29,2],[-0.337,0.5815,19,20,29,2],[-0.3502,0.5947,19,20,29,2],[-0.337,0.5947,19,20,29,2],[-0.337,0.6079,19,20,29,2],[-0.3238,0.6079,19,20,29,2],[-0.3106,0.6079,19,20,29,2],[-0.4163,0.6211,19,20,29,2],[-0.3238,0.6211,19,20,29,2],[-0.3106,0.6211,19,20,29,2],[-0.4295,0.6344,19,20,29,2],[-0.4163,0.6344,19,20,29,2],[-0.3106,0.6344,19,20,29,2],[-0.2974,0.6344,19,20,29,2],[-0.2841,0.6344,19,20,29,2],[-0.4427,0.6476,19,20,29,2],[-0.4295,0.6476,19,20,29,2],[-0.2974,0.6476,19,20,29,2],[-0.3767,0.6608,19,20,29,2],[-0.3634,0.6608,19,20,29,2],[-0.2445,0.6608,19,20,29,2],[-0.3767,0.674,19,20,29,2],[0.2445,0.674,19,20,29,2],[-0.1123,0.7004,19,20,29,2],[0.152,0.7137,19,20,29,2],[0.0859,0.7269,19,20,29,2]]];
+const bursts=[];
+const MAX_BURSTS=4;
+class FaceBurst {
+ constructor(x,y,index,scale){
+  this.x=x;this.y=y;this.index=index;this.age=0;this.points=mascotPoints[index];
+  this.size=Math.min(188,Math.max(112,Math.min(W,H)*0.285))*scale;
+  this.life=2.45;this.offset=rand(-Math.PI,Math.PI);
+  // 각 문자/LED 조각의 방출 방향을 최초 한 번만 계산 (매 프레임 난수 연산 방지).
+  this.scatter=this.points.map((p,i)=>{
+    const dx=p[0],dy=p[1],outward=Math.atan2(dy,dx);
+    const angle=outward+rand(-1.05,1.05);
+    const speed=rand(42,112)*(p[5]===2?1.05:1);
+    return {vx:Math.cos(angle)*speed,vy:Math.sin(angle)*speed-rand(0,24),
+      phase:rand(0,Math.PI*2),delay:rand(0,.18),twinkle:rand(9,20)};
+  });
+  this.tint=[[153,207,245],[255,225,242],[255,236,174]][index];
+ }
+ update(dt){this.age+=dt;return this.age<this.life;}
+ draw(){
+   const age=this.age;
+   const form=clamp(age/.56,0,1);
+   const spread=1-Math.pow(1-form,2.65);
+   const appeared=clamp(age/.16,0,1);
+   const scatterStart=1.20;
+   const t=clamp((age-scatterStart)/(this.life-scatterStart),0,1);
+   // 불꽃의 가운데가 순간적으로 밝아진 뒤 잦아드는 짧은 발광 펄스.
+   const pulse=Math.exp(-Math.pow((age-.21)/.19,2));
+   const globalFade=1-Math.pow(t,1.35);
+   const alpha=appeared*globalFade*state.opacity;
+   if(alpha<.012)return;
+   const size=this.size;
+   ctx.save();
+   // 캐릭터 이미지/스프라이트가 아니라 빛으로 퍼지는 원형 섬광만 사용.
+   if(age<.56){
+     const radius=(22+size*.60*spread),g=ctx.createRadialGradient(this.x,this.y,0,this.x,this.y,radius);
+     const [r,gg,b]=this.tint;
+     g.addColorStop(0,`rgba(${r},${gg},${b},${(pulse*.24*state.opacity).toFixed(3)})`);
+     g.addColorStop(.35,`rgba(${r},${gg},${b},${(pulse*.095*state.opacity).toFixed(3)})`);
+     g.addColorStop(1,`rgba(${r},${gg},${b},0)`);
+     ctx.fillStyle=g;ctx.fillRect(this.x-radius,this.y-radius,radius*2,radius*2);
+   }
+   // 반투명 외곽 불빛: 입자 자체 주위에서만 번짐. 얼굴의 어두운 표정선은 유지.
+   for(let i=0;i<this.points.length;i++){
+     const p=this.points[i],v=this.scatter[i];
+     const dx=p[0]*size,dy=p[1]*size;
+     const angle=Math.atan2(dy,dx);
+     const u=1-spread;
+     const perturb=Math.sin(i*2.413+this.offset+age*8)*9*u;
+     const localT=clamp((age-scatterStart-v.delay)/(this.life-scatterStart-v.delay),0,1);
+     const elapsed=Math.max(0,age-scatterStart-v.delay);
+     // 속도가 부드럽게 증가하면서 사방으로 비산; 약한 중력으로 실제 불꽃같이 떨어짐.
+     const motion=elapsed*elapsed/(elapsed+.18);
+     const xx=this.x+dx*spread+Math.cos(angle+this.offset)*perturb+v.vx*motion;
+     const yy=this.y+dy*spread+Math.sin(angle+this.offset)*perturb+v.vy*motion+state.gravity*.14*elapsed*elapsed;
+     const detailed=p[5]===2,accent=p[5]===1;
+     const side=Math.max(1.35,size*(detailed?.015:accent?.018:.021));
+     const twinkle=.83+.17*Math.sin(v.phase+age*v.twinkle);
+     const fade=Math.pow(1-localT,1.4);
+     const particleAlpha=alpha*fade*twinkle;
+     if(particleAlpha<.018)continue;
+     // 몸체 밝은 점/색 포인트의 주변에 약한 발광 헤일로를 더하고, 검은 이목구비는 제외.
+     const bright=p[2]+p[3]+p[4]>280 && !(p[2]<55&&p[3]<55&&p[4]<55);
+     if(bright && i%5===0){
+       const halo=side*(2.15+pulse*.8);
+       ctx.globalAlpha=particleAlpha*(.12+pulse*.23);
+       ctx.fillStyle=`rgb(${p[2]},${p[3]},${p[4]})`;
+       ctx.fillRect(xx-halo/2,yy-halo/2,halo,halo);
+     }
+     ctx.globalAlpha=particleAlpha;
+     ctx.fillStyle=`rgb(${p[2]},${p[3]},${p[4]})`;
+     ctx.fillRect(xx-side/2,yy-side/2,side,side);
+     // 멀어지는 일부 입자의 작은 꼬리: 선명한 정사각 LED 텍스처로 그려 광선 느낌 유지.
+     if(elapsed>.04 && i%8===0){
+       ctx.globalAlpha=particleAlpha*.28;
+       const tailSide=side*.6;
+       ctx.fillRect(xx-v.vx*.045-tailSide/2,yy-v.vy*.045-tailSide/2,tailSide,tailSide);
+     }
+   }
+   ctx.restore();
+ }
+}
+function explode(x,y,scale=1){
+ const index=Math.floor(Math.random()*mascotPoints.length);
+ bursts.push(new FaceBurst(x,y,index,scale));
+ if(bursts.length>MAX_BURSTS)bursts.shift();
+ const hue=[195,330,44][index];
+ // 첫 번째 HTML의 폭발 섬광/외곽 링/잔광 효과를 유지.
+ rings.push({x,y,r:0,max:rand(75,125)*state.power*scale,age:0,life:.55,h:hue});
+ flashes.push({x,y,age:0,life:.22,h:hue});
+ stamp(x,y,hue,1.6);
+ for(let i=0;i<22;i++){
+   const a=rand(0,Math.PI*2),speed=rand(70,154)*state.power;
+   particles.push(new Spark(x,y,Math.cos(a)*speed,Math.sin(a)*speed,hue+rand(-14,14),
+     {life:rand(.24,.6),size:rand(.35,.7),drag:1.7,gravityScale:.5}));
+ }
+ if(particles.length>1400) particles.splice(0,particles.length-1400);
+}
+function launch(tx=rand(W*0.12,W*0.88),ty=rand(H*0.16,H*0.63)){
+ const sx=clamp(tx+rand(-W*0.15,W*0.15),W*0.05,W*0.95),sy=H+5;
+ const duration=rand(0.62,1.05);
+ rockets.push({sx,sy,tx,ty,t:0,duration,h:rand(0,360),prevX:sx,prevY:sy});
+}
+function rocketUpdate(dt){
+ for(let i=rockets.length-1;i>=0;i--){
+  const r=rockets[i];r.t+=dt;
+  const t=clamp(r.t/r.duration,0,1),ease=1-Math.pow(1-t,1.5);
+  const x=r.sx+(r.tx-r.sx)*ease,y=r.sy+(r.ty-r.sy)*ease;
+  const segments=Math.max(1,Math.ceil(Math.hypot(x-r.prevX,y-r.prevY)/8));
+  for(let j=0;j<=segments;j++){const z=j/segments;stamp(r.prevX+(x-r.prevX)*z,r.prevY+(y-r.prevY)*z,r.h,0.55)}
+  if(Math.random()<0.65)particles.push(new Spark(x,y,rand(-22,22),rand(18,85),r.h,{life:rand(0.18,0.4),size:0.55,drag:3}));
+  r.prevX=x;r.prevY=y;
+  if(t>=1){explode(r.tx,r.ty);rockets.splice(i,1)}
+ }
+}
+function drawGrid(dt){
+ ctx.fillStyle=bg;ctx.fillRect(0,0,W,H);
+ ctx.textAlign='center';ctx.textBaseline='middle';ctx.font=`bold ${Math.max(9,cellH-1)}px ui-monospace,Consolas,monospace`;
+ const decay=Math.exp(-dt*3.4/state.trail);
+ for(let i=0;i<light.length;i++){
+  const p=light[i];p.a*=decay;
+  if(p.a<0.016){p.a=0;continue}
+  const x=(i%cols)*cellW+cellW/2,y=Math.floor(i/cols)*cellH+cellH/2;
+  const strength=clamp(p.a,0,1),alpha=clamp(strength*state.opacity,0,1);
+  if(alpha<0.012)continue;
+  const brightness=Math.round(50+strength*46);
+  const hue=((p.h%360)+360)%360;
+  const glyph=glyphs[clamp(Math.floor(strength*8),0,8)];
+  if(state.glow>0&&strength>0.22){
+   ctx.shadowBlur=state.glow*1.6;ctx.shadowColor=`hsla(${hue},100%,65%,${alpha})`;
+  }else ctx.shadowBlur=0;
+  ctx.fillStyle=`hsla(${hue},${p.s}%,${brightness}%,${alpha})`;
+  ctx.fillText(glyph,x,y);
+ }
+ ctx.shadowBlur=0;
+}
+function effectsUpdate(dt){
+ ctx.save();ctx.globalCompositeOperation='lighter';
+ for(let i=rings.length-1;i>=0;i--){
+  const r=rings[i];r.age+=dt;let t=r.age/r.life;
+  if(t>=1){rings.splice(i,1);continue}
+  r.r=r.max*(1-Math.pow(1-t,2));
+  ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,Math.PI*2);
+  ctx.lineWidth=1.6*(1-t);ctx.strokeStyle=`hsla(${r.h},95%,77%,${(1-t)**2*0.4*state.opacity})`;
+  ctx.stroke();
+ }
+ for(let i=flashes.length-1;i>=0;i--){
+  const f=flashes[i];f.age+=dt;let t=f.age/f.life;
+  if(t>=1){flashes.splice(i,1);continue}
+  const radius=30+70*t;
+  const g=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,radius);
+  g.addColorStop(0,`hsla(${f.h},100%,95%,${0.6*(1-t)**2*state.opacity})`);
+  g.addColorStop(.22,`hsla(${f.h},100%,65%,${0.25*(1-t)**2*state.opacity})`);
+  g.addColorStop(1,`hsla(${f.h},100%,45%,0)`);
+  ctx.fillStyle=g;ctx.fillRect(f.x-radius,f.y-radius,radius*2,radius*2);
+ }
+ ctx.restore();
+}
+let previous=performance.now();
+function frame(now){
+ const dt=Math.min((now-previous)/1000,0.045);previous=now;elapsed+=dt;
+ if(autoOn){autoClock-=dt;if(autoClock<=0){launch();autoClock=rand(0.38,0.85)}}
+ rocketUpdate(dt);
+ for(let i=particles.length-1;i>=0;i--)if(!particles[i].update(dt))particles.splice(i,1);
+ drawGrid(dt);effectsUpdate(dt);
+ for(let i=bursts.length-1;i>=0;i--)if(!bursts[i].update(dt))bursts.splice(i,1);
+ for(const b of bursts)b.draw();
+ requestAnimationFrame(frame);
+}
+canvas.addEventListener('pointerdown',e=>{const r=canvas.getBoundingClientRect();explode(e.clientX-r.left,e.clientY-r.top,1.0)});
+// 최초 실행 시 화면이 비어 보이지 않도록 즉시 폭발
+setTimeout(()=>explode(W*.48,H*.38,1.1),220);
+setTimeout(()=>explode(W*.69,H*.48,.8),680);
+requestAnimationFrame(frame);
+})();
+</script>
 </body>
 </html>
